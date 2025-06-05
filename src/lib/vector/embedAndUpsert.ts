@@ -20,7 +20,7 @@ export async function embedAndUpsertChunks(chunks: DocumentChunk[], collectionNa
   // Ensure collection exists (basic example, add more robust checks/creation logic)
   try {
     await client.getCollection(collectionName);
-  } catch (_) { // Changed 'error' to '_' as it was unused
+  } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
     // Assuming error means collection doesn't exist
     console.log(`Collection '${collectionName}' not found, attempting to create...`);
     // This requires the vector size to be known. It should match your embedding model's output.

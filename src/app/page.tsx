@@ -6,6 +6,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import Image from 'next/image';
 
 // Define a type for individual messages in the chat
 interface ChatMessage {
@@ -306,10 +307,13 @@ export default function HomePage() {
 
                 {generatedImageUrl && !isGeneratingImage && (
                   <div className="mt-4 border rounded-lg overflow-hidden shadow-lg">
-                    <img 
-                      src={generatedImageUrl} 
-                      alt={imagePrompt || 'Generated DALL·E image'} 
+                    <Image
+                      src={generatedImageUrl}
+                      alt={imagePrompt || 'Generated DALL·E image'}
+                      width={1024}
+                      height={1024}
                       className="w-full h-auto object-contain max-h-[512px] md:max-h-[768px] mx-auto"
+                      priority
                     />
                     {imagePrompt && <p className="text-xs text-muted-foreground p-2 bg-card text-center">Prompt: {imagePrompt}</p>}
                   </div>

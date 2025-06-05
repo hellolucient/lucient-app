@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt is required and must be a string.' }, { status: 400 });
     }
-  } catch (_) {
+  } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 

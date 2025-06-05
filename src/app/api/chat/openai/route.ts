@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     if (requestedModel && typeof requestedModel !== 'string') {
       return NextResponse.json({ error: 'Model must be a string if provided.' }, { status: 400 });
     }
-  } catch (_) {
+  } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
@@ -210,58 +210,30 @@ Please formulate your response based on the guidelines provided in your system i
 
     return NextResponse.json({ reply: responseText, fullResponse: chatCompletion }, { status: 200 });
 
-  } catch (openaiError: unknown) {
-    console.error('OpenAI Chat API: OpenAI API error object:', openaiError);
+  } catch (error) {
+    let errorMessage = "An unexpected error occurred.";
+    let errorCode = 500;
 
-    let errorMessage = 'Failed to get response from OpenAI API.';
-    let errorStatus = 500;
-    let errorDetails: string | undefined = undefined;
-
-    if (openaiError instanceof OpenAI.APIError) {
-      errorMessage = openaiError.message || errorMessage;
-      errorStatus = openaiError.status || errorStatus;
-      
-      if (openaiError.error && typeof openaiError.error === 'object' && 'message' in openaiError.error) {
-         errorDetails = (openaiError.error as { message?: string }).message;
-      } else {
-        // Fallback: Check for a more deeply nested structure if the primary error object doesn't have a message.
-        // This is an attempt to deal with less standard error shapes that might still be wrapped by APIError.
-        const errorAsObject = openaiError as unknown as Record<string, unknown>; // Cast to unknown first
-        if (typeof errorAsObject.response === 'object' && errorAsObject.response !== null) {
-          const response = errorAsObject.response as Record<string, unknown>; // This cast is okay as errorAsObject is now Record
-          if (typeof response.data === 'object' && response.data !== null) {
-            const data = response.data as Record<string, unknown>;
-            if (typeof data.error === 'object' && data.error !== null && 'message' in data.error && typeof (data.error as { message: unknown }).message === 'string') {
-              errorDetails = (data.error as { message: string }).message;
-            }
-          }
-        }
-      }
-
-      if (errorStatus === 401) {
-        errorMessage = 'OpenAI API authentication failed. Please check your API key.';
-      } else if (errorStatus === 429) {
-        errorMessage = 'OpenAI API rate limit exceeded or quota reached. Please check your OpenAI plan and billing details.';
-      }
-      // Safely try to get the most relevant error object to log
-      let errorToLog: unknown = openaiError.error; // Default to APIError.error
-      if (!errorToLog && typeof openaiError === 'object' && openaiError !== null) {
-        const errorAsObjectForLog = openaiError as unknown as Record<string, unknown>; // Cast to unknown first
-        if (typeof errorAsObjectForLog.response === 'object' && errorAsObjectForLog.response !== null) {
-            const responseForLog = errorAsObjectForLog.response as Record<string, unknown>; // This cast is okay
-            if (typeof responseForLog.data === 'object' && responseForLog.data !== null && 'error' in responseForLog.data) {
-                errorToLog = (responseForLog.data as {error: unknown}).error;
-            }
-        }
-      }
-      console.error(`OpenAI Chat API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, errorToLog);
-    } else if (openaiError instanceof Error) {
-      errorMessage = openaiError.message;
-      console.error('OpenAI Chat API: Generic Error from OpenAI call:', errorMessage);
+    // Check if the error is an APIError from the OpenAI SDK
+    if (error instanceof OpenAI.APIError) {
+      errorMessage = error.message || "Error calling OpenAI API";
+      errorCode = error.status || 500;
+      console.error("OpenAI APIError:", error.name, error.headers, error.error);
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
     } else {
-      console.error('OpenAI Chat API: Non-standard error thrown from OpenAI call:', openaiError);
+      // Fallback for non-Error objects
+      errorMessage = String(error);
     }
-    
-    return NextResponse.json({ error: errorMessage, details: errorDetails || errorMessage }, { status: errorStatus });
+    console.error("Error in OpenAI chat API:", error);
+    return NextResponse.json({ error: errorMessage }, { status: errorCode });
   }
+}
+
+async function streamToString(stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
+  let result = "";
+  for await (const part of stream) {
+    result += part.choices[0]?.delta?.content || "";
+  }
+  return result;
 } 

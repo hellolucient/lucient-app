@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Label must be a string if provided.' }, { status: 400 });
     }
 
-  } catch (_) {
+  } catch (_) { // eslint-disable-line @typescript-eslint/no-unused-vars
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 

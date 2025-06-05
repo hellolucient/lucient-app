@@ -36,7 +36,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionExists, setSessionExists] = useState(false);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<'anthropic' | 'openai'>('anthropic');
+  const [selectedProvider, setSelectedProvider] = useState<'anthropic' | 'openai'>('openai');
   const [selectedOpenAIModel, setSelectedOpenAIModel] = useState<string>(openAIModels[0].value); // Default to first OpenAI model
 
   // State for page mode (chat or image generation)

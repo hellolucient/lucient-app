@@ -41,10 +41,28 @@ export async function ensureCollectionExists(
     console.log(`Checking if collection '${collectionName}' exists...`);
     await client.getCollection(collectionName);
     console.log(`Collection '${collectionName}' already exists.`);
-  } catch (error: any) {
-    // A 404 error likely means the collection doesn't exist.
-    // Other errors could be network issues, auth problems, etc.
-    if (error.status === 404 || (error.message && error.message.includes("Not found"))) {
+  } catch (error: unknown) {
+    let isNotFoundError = false;
+    let errorMessage = 'Unknown error';
+
+    if (typeof error === 'object' && error !== null) {
+      if ('status' in error && (error as { status: unknown }).status === 404) {
+        isNotFoundError = true;
+      }
+      if ('message' in error && typeof (error as { message: unknown }).message === 'string') {
+        errorMessage = (error as { message: string }).message;
+        if (errorMessage.includes("Not found")) {
+          isNotFoundError = true;
+        }
+      }
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+      if (errorMessage.includes("Not found")) {
+        isNotFoundError = true;
+      }
+    }
+
+    if (isNotFoundError) {
       console.log(`Collection '${collectionName}' does not exist. Creating it...`);
       await client.createCollection(collectionName, {
         vectors: {
@@ -101,13 +119,26 @@ export async function ensurePayloadIndexExists(
     });
     console.log(`Successfully created/ensured payload index for field '${fieldName}' of type '${fieldType}' in collection '${collectionName}'.`);
 
-  } catch (error: any) {
-    // If createPayloadIndex fails because it already exists with different parameters, error handling might be complex.
-    // For now, we assume basic keyword index creation.
-    if (error.message && error.message.includes("already exists")) {
-        console.warn(`Payload index for field '${fieldName}' might already exist with different parameters or couldn't be confirmed: ${error.message}`);
+  } catch (error: unknown) {
+    let errorMessage = 'Unknown error';
+    let alreadyExists = false;
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      if (errorMessage.includes("already exists")) {
+        alreadyExists = true;
+      }
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+      if (errorMessage.includes("already exists")) {
+        alreadyExists = true;
+      }
+    }
+
+    if (alreadyExists) {
+        console.warn(`Payload index for field '${fieldName}' might already exist with different parameters or couldn't be confirmed: ${errorMessage}`);
     } else {
-        console.error(`Error ensuring payload index for field '${fieldName}' in collection '${collectionName}':`, error);
+        console.error(`Error ensuring payload index for field '${fieldName}' in collection '${collectionName}':`, error); // Log the original error for more context
         throw error; // Re-throw other errors
     }
   }

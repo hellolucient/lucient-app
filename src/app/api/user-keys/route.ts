@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Label must be a string if provided.' }, { status: 400 });
     }
 
-  } catch (e) {
+  } catch (_) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
@@ -94,11 +94,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: 'API Key saved successfully.', data }, { status: 200 });
 
-  } catch (encryptionError: any) {
-    console.error('Encryption/Save Error:', encryptionError.message);
-    if (encryptionError.message.includes('USER_API_KEY_ENCRYPTION_SECRET') || encryptionError.message.includes('Encryption input must be')) {
-        return NextResponse.json({ error: 'Server configuration error during encryption.', details: encryptionError.message }, { status: 500 });
+  } catch (encryptionError: unknown) {
+    let errorMessage = 'An unexpected error occurred while saving the API key.';
+    let errorDetails = 'Unknown error during encryption/save process.';
+
+    if (encryptionError instanceof Error) {
+      errorDetails = encryptionError.message;
+      console.error('Encryption/Save Error:', errorDetails);
+      if (errorDetails.includes('USER_API_KEY_ENCRYPTION_SECRET') || errorDetails.includes('Encryption input must be')) {
+        // Keep original more specific message for this known server config issue
+        errorMessage = 'Server configuration error during encryption.'; 
+      }
+    } else {
+      console.error('Encryption/Save Error (non-standard error object):', encryptionError);
     }
-    return NextResponse.json({ error: 'An unexpected error occurred while saving the API key.', details: encryptionError.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage, details: errorDetails }, { status: 500 });
   }
 } 

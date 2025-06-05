@@ -8,7 +8,7 @@ interface ChunkingOptions {
 
 interface DocumentChunk {
   pageContent: string;
-  metadata: Record<string, any>; // Can be more specific based on needs
+  metadata: Record<string, unknown>; // Changed 'any' to 'unknown'
 }
 
 // Basic text chunking function

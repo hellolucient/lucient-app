@@ -1,7 +1,7 @@
 // Placeholder for embedding functions
 // This could use OpenAI, LlamaIndex, or other embedding models
 
-import OpenAI from 'openai'; // Import the main OpenAI type if needed for types
+// import OpenAI from 'openai'; // Removed: Not used as openai client is imported directly
 import { openai } from './openai'; // Use the pre-configured client from openai.ts
 
 // Recommended embedding model by OpenAI (as of late 2023/early 2024)
@@ -34,10 +34,16 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       console.error("Failed to generate embedding or received an empty response from OpenAI.", response);
       throw new Error("Failed to generate embedding: No embedding data received from OpenAI.");
     }
-  } catch (error: any) {
-    console.error("Error generating embedding with OpenAI:", error.message);
+  } catch (error: unknown) {
+    let errorMessage = "Unknown error during embedding generation.";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      console.error("Error generating embedding with OpenAI:", errorMessage);
+    } else {
+      console.error("Error generating embedding with OpenAI (non-standard error):", error);
+    }
     // Consider re-throwing a more specific error or handling it based on the error type
-    throw new Error(`OpenAI embedding generation failed: ${error.message}`);
+    throw new Error(`OpenAI embedding generation failed: ${errorMessage}`);
   }
 }
 

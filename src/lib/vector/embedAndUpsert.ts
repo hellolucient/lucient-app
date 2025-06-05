@@ -10,7 +10,7 @@ const COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || "lucient_documents
 interface DocumentChunk {
   id: string;
   text: string;
-  metadata?: Record<string, any>; // Optional metadata
+  metadata?: Record<string, unknown>; // Changed 'any' to 'unknown'
   embedding?: number[]; // Optional: if pre-computed
 }
 
@@ -20,7 +20,7 @@ export async function embedAndUpsertChunks(chunks: DocumentChunk[], collectionNa
   // Ensure collection exists (basic example, add more robust checks/creation logic)
   try {
     await client.getCollection(collectionName);
-  } catch (error) {
+  } catch (_) { // Changed 'error' to '_' as it was unused
     // Assuming error means collection doesn't exist
     console.log(`Collection '${collectionName}' not found, attempting to create...`);
     // This requires the vector size to be known. It should match your embedding model's output.

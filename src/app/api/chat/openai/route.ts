@@ -5,6 +5,15 @@ import { decrypt } from '@/lib/encryption';
 import OpenAI from 'openai';
 import { queryTopK } from '@/lib/vector/queryTopK';
 
+// Define a more specific type for the Qdrant payload
+interface QdrantChatPayload {
+  originalText?: string;
+  fileName?: string;
+  original_filename?: string;
+  source?: string;
+  page_number?: number;
+}
+
 const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
 const TOP_K_RESULTS = 5;
 
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
     if (requestedModel && typeof requestedModel !== 'string') {
       return NextResponse.json({ error: 'Model must be a string if provided.' }, { status: 400 });
     }
-  } catch (e) {
+  } catch (_) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
@@ -62,14 +71,7 @@ export async function POST(request: NextRequest) {
     if (contextResults && contextResults.length > 0) {
       const processedContextChunks = contextResults
         .map(result => {
-          const payload = result.payload as {
-            originalText?: string;
-            fileName?: string;
-            original_filename?: string;
-            source?: string;
-            page_number?: number;
-            [key: string]: any;
-          } | null;
+          const payload = result.payload as QdrantChatPayload | null;
 
           if (!payload || !payload.originalText) {
             console.log(`OpenAI Chat API: Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
@@ -98,9 +100,13 @@ export async function POST(request: NextRequest) {
     } else {
       console.log('OpenAI Chat API: No results returned from Qdrant (queryTopK) for the user message.');
     }
-  } catch (ragError: any) {
-    console.error('OpenAI Chat API: Error during RAG context retrieval:', ragError.message);
-    if (ragError.stack) {
+  } catch (ragError: unknown) {
+    let errorMessage = 'Unknown error during RAG context retrieval';
+    if (ragError instanceof Error) {
+      errorMessage = ragError.message;
+      console.error('OpenAI Chat API: Error during RAG context retrieval:', errorMessage);
+    } else {
+      console.error('OpenAI Chat API: Non-error thrown during RAG context retrieval:', ragError);
     }
     retrievedContext = 'Error retrieving context. Answering from general knowledge.';
   }
@@ -128,9 +134,15 @@ export async function POST(request: NextRequest) {
       authTag: apiKeyData.auth_tag,
     });
 
-  } catch (decryptionError: any) {
-    console.error('OpenAI Chat API: Decryption failed:', decryptionError.message);
-    return NextResponse.json({ error: 'Failed to decrypt OpenAI API key.', details: decryptionError.message }, { status: 500 });
+  } catch (decryptionError: unknown) {
+    let errorDetails = 'Unknown decryption error';
+    if (decryptionError instanceof Error) {
+      errorDetails = decryptionError.message;
+      console.error('OpenAI Chat API: Decryption failed:', errorDetails);
+    } else {
+      console.error('OpenAI Chat API: Non-error thrown during decryption:', decryptionError);
+    }
+    return NextResponse.json({ error: 'Failed to decrypt OpenAI API key.', details: errorDetails }, { status: 500 });
   }
 
   try {
@@ -198,16 +210,35 @@ Please formulate your response based on the guidelines provided in your system i
 
     return NextResponse.json({ reply: responseText, fullResponse: chatCompletion }, { status: 200 });
 
-  } catch (openaiError: any) {
-    console.error('OpenAI Chat API: OpenAI API error:', openaiError);
+  } catch (openaiError: unknown) {
+    console.error('OpenAI Chat API: OpenAI API error object:', openaiError);
+
     let errorMessage = 'Failed to get response from OpenAI API.';
-    if (openaiError.status === 401) {
+    let errorStatus = 500;
+    let errorDetails: string | undefined = undefined;
+
+    if (openaiError instanceof OpenAI.APIError) {
+      errorMessage = openaiError.message || errorMessage;
+      errorStatus = openaiError.status || errorStatus;
+      if (openaiError.error && typeof openaiError.error === 'object' && 'message' in openaiError.error) {
+         errorDetails = (openaiError.error as { message?: string }).message;
+      } else if ( (openaiError as any).response?.data?.error?.message ) {
+         errorDetails = (openaiError as any).response.data.error.message;
+      }
+
+      if (errorStatus === 401) {
         errorMessage = 'OpenAI API authentication failed. Please check your API key.';
-    } else if (openaiError.status === 429) {
+      } else if (errorStatus === 429) {
         errorMessage = 'OpenAI API rate limit exceeded or quota reached. Please check your OpenAI plan and billing details.';
-    } else if (openaiError.message) {
-        errorMessage = openaiError.message;
+      }
+      console.error(`OpenAI Chat API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, openaiError.error || (openaiError as any).response?.data?.error);
+    } else if (openaiError instanceof Error) {
+      errorMessage = openaiError.message;
+      console.error('OpenAI Chat API: Generic Error from OpenAI call:', errorMessage);
+    } else {
+      console.error('OpenAI Chat API: Non-standard error thrown from OpenAI call:', openaiError);
     }
-    return NextResponse.json({ error: errorMessage, details: openaiError.error?.message || openaiError.response?.data?.error?.message || openaiError.message }, { status: openaiError.status || 500 });
+    
+    return NextResponse.json({ error: errorMessage, details: errorDetails || errorMessage }, { status: errorStatus });
   }
 } 

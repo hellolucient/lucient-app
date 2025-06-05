@@ -4,7 +4,16 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { decrypt } from '@/lib/encryption';
 import Anthropic from '@anthropic-ai/sdk';
 import { queryTopK } from '@/lib/vector/queryTopK';
-import { generateEmbedding } from '@/lib/ai/embeddingUtils';
+
+// Define a more specific type for the Qdrant payload
+interface QdrantChatPayload {
+  originalText?: string;
+  fileName?: string;
+  original_filename?: string; // Maintained for current logic
+  source?: string; // Maintained for current logic
+  page_number?: number;
+  // We are intentionally not including [key: string]: any; to be more specific
+}
 
 const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
 const TOP_K_RESULTS = 5;
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
     if (!userMessage || typeof userMessage !== 'string') {
       return NextResponse.json({ error: 'Message is required and must be a string.' }, { status: 400 });
     }
-  } catch (e) {
+  } catch (_) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
@@ -63,14 +72,7 @@ export async function POST(request: NextRequest) {
     if (contextResults && contextResults.length > 0) {
       const processedContextChunks = contextResults
         .map(result => {
-          const payload = result.payload as {
-            originalText?: string;
-            fileName?: string;
-            original_filename?: string;
-            source?: string;
-            page_number?: number;
-            [key: string]: any;
-          } | null;
+          const payload = result.payload as QdrantChatPayload | null;
 
           if (!payload || !payload.originalText) {
             console.log(`Chat API (Claude): Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
@@ -99,9 +101,16 @@ export async function POST(request: NextRequest) {
     } else {
       console.log('Chat API (Claude): No results returned from Qdrant (queryTopK) for the user message.');
     }
-  } catch (ragError: any) {
-    console.error('Chat API (Claude): Error during RAG context retrieval:', ragError.message);
-    if (ragError.stack) {
+  } catch (ragError: unknown) {
+    let errorMessage = 'Unknown error during RAG context retrieval';
+    if (ragError instanceof Error) {
+      errorMessage = ragError.message;
+      console.error('Chat API (Claude): Error during RAG context retrieval:', errorMessage);
+      if (ragError.stack) {
+        // console.error('Chat API (Claude) Stack:', ragError.stack); // Optional: log stack trace
+      }
+    } else {
+      console.error('Chat API (Claude): Non-error thrown during RAG context retrieval:', ragError);
     }
     retrievedContext = 'Error retrieving context. Answering from general knowledge.';
   }
@@ -131,9 +140,15 @@ export async function POST(request: NextRequest) {
       authTag: apiKeyData.auth_tag,
     });
 
-  } catch (decryptionError: any) {
-    console.error('Chat API: Decryption failed:', decryptionError.message);
-    return NextResponse.json({ error: 'Failed to decrypt API key.', details: decryptionError.message }, { status: 500 });
+  } catch (decryptionError: unknown) {
+    let errorDetails = 'Unknown decryption error';
+    if (decryptionError instanceof Error) {
+      errorDetails = decryptionError.message;
+      console.error('Chat API: Decryption failed:', errorDetails);
+    } else {
+      console.error('Chat API: Non-error thrown during decryption:', decryptionError);
+    }
+    return NextResponse.json({ error: 'Failed to decrypt API key.', details: errorDetails }, { status: 500 });
   }
 
   // 4. Call Claude API
@@ -208,14 +223,30 @@ Please formulate your response based on the guidelines provided in your system i
 
     return NextResponse.json({ reply: responseText, fullResponse: claudeResponse }, { status: 200 });
 
-  } catch (claudeError: any) {
-    console.error('Chat API: Claude API error:', claudeError);
+  } catch (claudeError: unknown) {
+    console.error('Chat API: Claude API error object:', claudeError); // Log the raw error object for inspection
+
     let errorMessage = 'Failed to get response from Claude API.';
-    if (claudeError.status === 401) {
+    let errorStatus = 500;
+    let errorDetails: string | undefined = undefined;
+
+    if (claudeError instanceof Anthropic.APIError) {
+      errorMessage = claudeError.message || errorMessage;
+      errorStatus = claudeError.status || errorStatus;
+      if (claudeError.error && typeof claudeError.error === 'object' && 'message' in claudeError.error) {
+        errorDetails = (claudeError.error as { message?: string }).message;
+      }
+      if (errorStatus === 401) {
         errorMessage = 'Claude API authentication failed. Please check your API key.';
-    } else if (claudeError.message) {
-        errorMessage = claudeError.message;
+      }
+      console.error(`Chat API: Anthropic APIError (Status ${errorStatus}): ${errorMessage}`, claudeError.error);
+    } else if (claudeError instanceof Error) {
+      errorMessage = claudeError.message;
+      console.error('Chat API: Generic Error from Claude call:', errorMessage);
+    } else {
+      console.error('Chat API: Non-standard error thrown from Claude call:', claudeError);
     }
-    return NextResponse.json({ error: errorMessage, details: claudeError.error?.message || claudeError.message }, { status: claudeError.status || 500 });
+
+    return NextResponse.json({ error: errorMessage, details: errorDetails || errorMessage }, { status: errorStatus });
   }
 } 

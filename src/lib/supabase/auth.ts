@@ -1,7 +1,16 @@
 // Placeholder for Supabase auth helpers, user/admin role checks
 
 import { getSupabaseClient } from './client';
-import type { User } from '@supabase/supabase-js';
+import type { User, AuthError, Session } from '@supabase/supabase-js';
+
+// Define a more specific type for auth function responses
+interface AuthActionResponse {
+  data: {
+    user: User | null;
+    session?: Session | null; // session is present in signIn, can be in signUp
+  };
+  error: AuthError | null;
+}
 
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = getSupabaseClient();
@@ -52,7 +61,7 @@ export async function isUserAdmin(): Promise<boolean> {
 
 // Add other auth related functions: signUp, signIn, signOut, passwordReset, etc.
 
-export async function signUpWithEmail(email: string, password: string): Promise<any> {
+export async function signUpWithEmail(email: string, password: string): Promise<AuthActionResponse> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.auth.signUp({
     email: email,
@@ -66,10 +75,10 @@ export async function signUpWithEmail(email: string, password: string): Promise<
     throw error;
   }
   console.log("Sign up successful, user needs to confirm email (if enabled):", data.user);
-  return data;
+  return { data, error };
 }
 
-export async function signInWithEmail(email: string, password: string): Promise<any> {
+export async function signInWithEmail(email: string, password: string): Promise<AuthActionResponse> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.auth.signInWithPassword({
     email: email,
@@ -80,7 +89,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
     throw error;
   }
   console.log("Sign in successful:", data.user);
-  return data;
+  return { data, error };
 }
 
 // Example signOut function:

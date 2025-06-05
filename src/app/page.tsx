@@ -13,6 +13,12 @@ interface ChatMessage {
   content: string;
 }
 
+// Define a type for the chat request body
+interface ChatRequestBody {
+  message: string;
+  model?: string; // Optional, as it's only for OpenAI
+}
+
 // Define available OpenAI models
 const openAIModels = [
   { value: "gpt-4o", label: "GPT-4o (Omni)" },
@@ -70,7 +76,7 @@ export default function HomePage() {
     setIsLoading(true);
 
     let apiEndpoint = '/api/chat';
-    let requestBody: any = { message: newUserMessage.content };
+    const requestBody: ChatRequestBody = { message: newUserMessage.content };
 
     if (selectedProvider === 'openai') {
       apiEndpoint = '/api/chat/openai';
@@ -95,9 +101,15 @@ export default function HomePage() {
       const assistantMessage: ChatMessage = { role: 'assistant', content: data.reply };
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending message to", selectedProvider, ":", error);
-      const errorMessage: ChatMessage = { role: 'error', content: `Error with ${selectedProvider}${selectedProvider === 'openai' ? ' (' + selectedOpenAIModel + ')' : ''}: ${error.message || 'An error occurred.'}` };
+      let errorMessageContent = 'An error occurred.';
+      if (error instanceof Error) {
+        errorMessageContent = error.message;
+      } else if (typeof error === 'string') {
+        errorMessageContent = error;
+      }
+      const errorMessage: ChatMessage = { role: 'error', content: `Error with ${selectedProvider}${selectedProvider === 'openai' ? ' (' + selectedOpenAIModel + ')' : ''}: ${errorMessageContent}` };
       setMessages(prevMessages => [...prevMessages, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -124,9 +136,15 @@ export default function HomePage() {
         throw new Error(result.error || result.details || 'Failed to generate image.');
       }
       setGeneratedImageUrl(result.imageUrl);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error generating image:", error);
-      setImageGenError(error.message || 'An unexpected error occurred while generating the image.');
+      let detailMessage = 'An unexpected error occurred while generating the image.';
+      if (error instanceof Error) {
+        detailMessage = error.message;
+      } else if (typeof error === 'string') {
+        detailMessage = error;
+      }
+      setImageGenError(detailMessage);
     } finally {
       setIsGeneratingImage(false);
     }

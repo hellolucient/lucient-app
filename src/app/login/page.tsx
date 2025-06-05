@@ -46,9 +46,15 @@ export default function LoginPage() {
         await signInWithEmail(email, password);
         router.push(redirectTo); // Redirect after successful login
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Auth error:", err);
-      setError(err.message || "An unexpected error occurred.");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (typeof err === 'string') {
+        setError(err);
+      } else {
+        setError("An unexpected error occurred.");
+      }
     } finally {
       setIsLoading(false);
     }

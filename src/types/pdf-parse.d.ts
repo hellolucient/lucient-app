@@ -2,14 +2,16 @@ declare module 'pdf-parse/lib/pdf-parse.js' {
   interface PDFData {
     numpages: number;
     numrender: number;
-    info: any;
-    metadata: any;
+    info: Record<string, unknown>;
+    metadata: Record<string, unknown>;
     text: string;
     version: string;
-    [key: string]: any; // for flexibility
+    [key: string]: unknown;
   }
 
-  type PdfParseFunctionType = (dataBuffer: Buffer, options?: any) => Promise<PDFData>;
+  type PdfParseOptions = Record<string, unknown>;
+
+  type PdfParseFunctionType = (dataBuffer: Buffer, options?: PdfParseOptions) => Promise<PDFData>;
 
   const pdfParse: PdfParseFunctionType;
   export default pdfParse;

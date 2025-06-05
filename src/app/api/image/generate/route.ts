@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt is required and must be a string.' }, { status: 400 });
     }
-  } catch (e) {
+  } catch (_) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
@@ -73,9 +73,15 @@ export async function POST(request: NextRequest) {
       authTag: apiKeyData.auth_tag,
     });
 
-  } catch (decryptionError: any) {
-    console.error('Image API: Decryption failed:', decryptionError.message);
-    return NextResponse.json({ error: 'Failed to decrypt OpenAI API key.', details: decryptionError.message }, { status: 500 });
+  } catch (decryptionError: unknown) {
+    let errorDetails = 'Unknown decryption error';
+    if (decryptionError instanceof Error) {
+      errorDetails = decryptionError.message;
+      console.error('Image API: Decryption failed:', errorDetails);
+    } else {
+      console.error('Image API: Non-error thrown during decryption:', decryptionError);
+    }
+    return NextResponse.json({ error: 'Failed to decrypt OpenAI API key.', details: errorDetails }, { status: 500 });
   }
 
   // 4. Call OpenAI Image Generation API (DALL-E)
@@ -106,18 +112,44 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ imageUrl: imageUrl, fullResponse: firstImage }, { status: 200 });
 
-  } catch (openaiError: any) {
-    console.error('Image API: OpenAI API error:', openaiError);
+  } catch (openaiError: unknown) {
+    console.error('Image API: OpenAI API error object:', openaiError);
+
     let errorMessage = 'Failed to generate image using OpenAI API.';
-    if (openaiError.status === 401) {
+    let errorStatus = 500;
+    let errorDetails: string | undefined = undefined;
+
+    if (openaiError instanceof OpenAI.APIError) {
+      errorMessage = openaiError.message || errorMessage;
+      errorStatus = openaiError.status || errorStatus;
+      
+      // Extract details from openaiError.error (which could be an object with code, message, etc.)
+      // or from openaiError.response.data.error for some HTTP errors
+      let nestedError: { message?: string; code?: string } | undefined = undefined;
+      if (openaiError.error && typeof openaiError.error === 'object') {
+        nestedError = openaiError.error as { message?: string; code?: string };
+        errorDetails = nestedError.message;
+      } else if ((openaiError as any).response?.data?.error && typeof (openaiError as any).response.data.error === 'object') {
+        nestedError = (openaiError as any).response.data.error;
+        errorDetails = nestedError?.message;
+      }
+      
+      if (errorStatus === 401) {
         errorMessage = 'OpenAI API authentication failed. Please check your API key.';
-    } else if (openaiError.status === 429) {
+      } else if (errorStatus === 429) {
         errorMessage = 'OpenAI API rate limit exceeded or quota reached. Please check your OpenAI plan and billing details.';
-    } else if (openaiError.status === 400 && openaiError.error?.code === 'content_policy_violation') {
+      } else if (errorStatus === 400 && nestedError?.code === 'content_policy_violation') {
         errorMessage = `Your prompt was rejected by OpenAI\'s content policy. Please modify your prompt.`;
-    } else if (openaiError.message) {
-        errorMessage = openaiError.message;
+        errorDetails = nestedError?.message || 'Content policy violation'; // Ensure details has a value
+      }
+      console.error(`Image API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, openaiError.error || (openaiError as any).response?.data?.error);
+    } else if (openaiError instanceof Error) {
+      errorMessage = openaiError.message;
+      console.error('Image API: Generic Error from OpenAI Image call:', errorMessage);
+    } else {
+      console.error('Image API: Non-standard error thrown from OpenAI Image call:', openaiError);
     }
-    return NextResponse.json({ error: errorMessage, details: openaiError.error?.message || openaiError.response?.data?.error?.message || openaiError.message }, { status: openaiError.status || 500 });
+    
+    return NextResponse.json({ error: errorMessage, details: errorDetails || errorMessage }, { status: errorStatus });
   }
 } 

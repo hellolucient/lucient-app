@@ -8,11 +8,20 @@ import mammoth from 'mammoth'; // For .doc, .docx
 import * as pdf from 'pdf-parse/lib/pdf-parse.js'; // For .pdf
 import { randomUUID } from 'crypto'; // Import randomUUID
 
+// Define a more specific type for the document payload sent to Qdrant
+interface DocumentPointPayload {
+  userId: string;
+  fileName: string;
+  originalText: string;
+  metadata: Record<string, unknown>; // langchain Document.metadata is Record<string, unknown>
+  [key: string]: unknown; // Add index signature to make it compatible with Record<string, unknown>
+}
+
 // Define PointStruct locally if import is problematic
 interface PointStruct {
   id: string | number;
   vector: number[];
-  payload?: Record<string, any>;
+  payload?: DocumentPointPayload; // Use the more specific type
 }
 
 const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
@@ -94,13 +103,15 @@ export async function POST(req: NextRequest) {
         // This case should ideally not be reached if ALLOWED_FILE_TYPES check is correct
         return NextResponse.json({ error: `File type ${file.type} was allowed but not handled in parsing.` }, { status: 500 });
       }
-    } catch (parsingError: any) {
+    } catch (parsingError: unknown) {
       console.error(`[API/DOCS_UPSERT] Error during file parsing. File: ${file.name}, Type: ${file.type}. Error:`, parsingError);
       let detail = 'Unknown parsing error';
       if (parsingError instanceof Error) {
         detail = parsingError.message;
       } else if (typeof parsingError === 'string') {
         detail = parsingError;
+      } else {
+        detail = 'Non-standard error object during parsing.';
       }
       return NextResponse.json({ error: `Failed to parse file content for ${file.name}.`, details: detail }, { status: 500 });
     }
@@ -158,35 +169,52 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    // Catch-all for any other errors in the process
+  } catch (error: unknown) {
     console.error('[API/DOCS_UPSERT] Critical error in POST handler. Full error object:', error);
-    if (error.data) {
-      console.error('[API/DOCS_UPSERT] Qdrant error data:', JSON.stringify(error.data, null, 2));
-    }
+
     let errorMessage = 'An unknown server error occurred.';
-    let errorDetails = '';
+    let errorDetails: string | undefined = undefined;
+    let qdrantErrorData: unknown = null;
+    let errorStatus = 500;
 
-    if (error.message) { // Standard JS Error object
-        errorMessage = error.message;
-    }
-    if (error.stack) {
+    if (typeof error === 'object' && error !== null) {
+      // Check for Qdrant ResponseError like structure or other common error patterns
+      // Note: @qdrant/js-client-rest can throw ResponseError which has status and response.data
+      if ('status' in error && typeof (error as { status: unknown }).status === 'number') {
+        errorStatus = (error as { status: number }).status;
+      }
+
+      if ('message' in error && typeof (error as { message: unknown }).message === 'string') {
+        errorMessage = (error as { message: string }).message;
+      }
+      
+      if ('data' in error && (error as { data: unknown }).data) {
+        qdrantErrorData = (error as { data: unknown }).data;
+        console.error('[API/DOCS_UPSERT] Qdrant error data:', JSON.stringify(qdrantErrorData, null, 2));
+        // Attempt to get more specific Qdrant error message
+        if (typeof qdrantErrorData === 'object' && qdrantErrorData !== null && 'status' in qdrantErrorData) {
+          const qdStatus = (qdrantErrorData as {status: any}).status;
+          if (qdStatus && typeof qdStatus === 'object' && 'error' in qdStatus && typeof qdStatus.error === 'string') {
+            errorMessage = `Qdrant API Error: ${qdStatus.error}`;
+          }
+        }
+      } else if ('statusText' in error && typeof (error as { statusText: unknown }).statusText === 'string' && errorStatus !== 500) {
+         // If we got a status from error.status, and there's a statusText, use it for more detail
+         errorMessage = `Error ${errorStatus}: ${(error as { statusText: string }).statusText}`;
+      }
+
+      if (error instanceof Error && error.stack) {
         errorDetails = error.stack;
+      }
+    } else if (typeof error === 'string') {
+      errorMessage = error;
     }
-
-    // Attempt to get more specific details if it's a Qdrant-like error structure
-    if (error.data && error.data.status && error.data.status.error) {
-      errorMessage = `Qdrant API Error: ${error.data.status.error}`;
-    } else if (error.status && error.statusText) { // Fallback for other HTTP-like errors
-      errorMessage = `Error ${error.status}: ${error.statusText}`;
-    }
-
 
     return NextResponse.json({
       error: 'Failed to process document due to a server error.',
       details: errorMessage,
-      qdrantError: error.data ? error.data : null, // Include Qdrant's response if available
+      qdrantError: qdrantErrorData,
       fullErrorStack: errorDetails
-    }, { status: 500 });
+    }, { status: errorStatus });
   }
 } 

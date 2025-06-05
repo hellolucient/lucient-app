@@ -27,24 +27,37 @@ export default function LoginPage() {
 
     try {
       if (isSigningUp) {
-        const data = await signUpWithEmail(email, password);
+        const result = await signUpWithEmail(email, password);
         // Supabase might return a user object here if email confirmation is off, or a session/user if it's on and auto-confirmed
         // Or it might return data indicating confirmation is needed.
-        if (data.user && data.user.identities && data.user.identities.length === 0) {
+        if (result.data?.user && result.data.user.identities && result.data.user.identities.length === 0) {
           setMessage(
             "Signup successful! Please check your email to confirm your account if required by settings, then sign in."
           );
           setIsSigningUp(false); // Switch to sign-in form
-        } else if (data.user) {
+        } else if (result.data?.user) {
            setMessage("Signup successful! You can now sign in.");
-           router.push(redirectTo); // Or redirect to login with a message
+           // router.push(redirectTo); // Redirect immediately after signup if user exists and confirmed
+           // Forcing sign-in after signup for now to simplify flow, as email confirmation might be on.
+           setIsSigningUp(false); // Switch to sign-in form
+        } else if (result.error) {
+          setError(result.error.message);
         } else {
           // This case might occur if email confirmation is required and not yet done
+          // or if there was no user object and no error (should be unlikely with Supabase signUp)
           setMessage("Signup successful! Please check your email to confirm your account.");
+          setIsSigningUp(false); // Switch to sign-in form
         }
       } else {
-        await signInWithEmail(email, password);
-        router.push(redirectTo); // Redirect after successful login
+        const result = await signInWithEmail(email, password);
+        if (result.error) {
+          setError(result.error.message);
+        } else if (result.data?.user) {
+          router.push(redirectTo); // Redirect after successful login
+        } else {
+          // Should not happen if there is no error and no user
+          setError("Sign in failed. Please try again.");
+        }
       }
     } catch (err: unknown) {
       console.error("Auth error:", err);

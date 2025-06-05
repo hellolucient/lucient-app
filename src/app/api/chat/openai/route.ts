@@ -220,10 +220,22 @@ Please formulate your response based on the guidelines provided in your system i
     if (openaiError instanceof OpenAI.APIError) {
       errorMessage = openaiError.message || errorMessage;
       errorStatus = openaiError.status || errorStatus;
+      
       if (openaiError.error && typeof openaiError.error === 'object' && 'message' in openaiError.error) {
          errorDetails = (openaiError.error as { message?: string }).message;
-      } else if ( (openaiError as any).response?.data?.error?.message ) {
-         errorDetails = (openaiError as any).response.data.error.message;
+      } else {
+        // Fallback: Check for a more deeply nested structure if the primary error object doesn't have a message.
+        // This is an attempt to deal with less standard error shapes that might still be wrapped by APIError.
+        const errorAsObject = openaiError as unknown as Record<string, unknown>; // Cast to unknown first
+        if (typeof errorAsObject.response === 'object' && errorAsObject.response !== null) {
+          const response = errorAsObject.response as Record<string, unknown>; // This cast is okay as errorAsObject is now Record
+          if (typeof response.data === 'object' && response.data !== null) {
+            const data = response.data as Record<string, unknown>;
+            if (typeof data.error === 'object' && data.error !== null && 'message' in data.error && typeof (data.error as { message: unknown }).message === 'string') {
+              errorDetails = (data.error as { message: string }).message;
+            }
+          }
+        }
       }
 
       if (errorStatus === 401) {
@@ -231,7 +243,18 @@ Please formulate your response based on the guidelines provided in your system i
       } else if (errorStatus === 429) {
         errorMessage = 'OpenAI API rate limit exceeded or quota reached. Please check your OpenAI plan and billing details.';
       }
-      console.error(`OpenAI Chat API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, openaiError.error || (openaiError as any).response?.data?.error);
+      // Safely try to get the most relevant error object to log
+      let errorToLog: unknown = openaiError.error; // Default to APIError.error
+      if (!errorToLog && typeof openaiError === 'object' && openaiError !== null) {
+        const errorAsObjectForLog = openaiError as unknown as Record<string, unknown>; // Cast to unknown first
+        if (typeof errorAsObjectForLog.response === 'object' && errorAsObjectForLog.response !== null) {
+            const responseForLog = errorAsObjectForLog.response as Record<string, unknown>; // This cast is okay
+            if (typeof responseForLog.data === 'object' && responseForLog.data !== null && 'error' in responseForLog.data) {
+                errorToLog = (responseForLog.data as {error: unknown}).error;
+            }
+        }
+      }
+      console.error(`OpenAI Chat API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, errorToLog);
     } else if (openaiError instanceof Error) {
       errorMessage = openaiError.message;
       console.error('OpenAI Chat API: Generic Error from OpenAI call:', errorMessage);

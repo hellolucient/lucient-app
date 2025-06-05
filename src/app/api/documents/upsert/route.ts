@@ -193,9 +193,16 @@ export async function POST(req: NextRequest) {
         console.error('[API/DOCS_UPSERT] Qdrant error data:', JSON.stringify(qdrantErrorData, null, 2));
         // Attempt to get more specific Qdrant error message
         if (typeof qdrantErrorData === 'object' && qdrantErrorData !== null && 'status' in qdrantErrorData) {
-          const qdStatus = (qdrantErrorData as {status: any}).status;
-          if (qdStatus && typeof qdStatus === 'object' && 'error' in qdStatus && typeof qdStatus.error === 'string') {
-            errorMessage = `Qdrant API Error: ${qdStatus.error}`;
+          // Cast qdrantErrorData to a type that might have a status property
+          const qdrantErrorRecord = qdrantErrorData as Record<string, unknown>; 
+          const qdStatus = qdrantErrorRecord.status; // qdStatus is now unknown
+          
+          // Check if qdStatus is an object and has an error property
+          if (typeof qdStatus === 'object' && qdStatus !== null && 'error' in qdStatus) {
+            const statusRecord = qdStatus as Record<string, unknown>; // Cast qdStatus to access its properties
+            if (typeof statusRecord.error === 'string') {
+              errorMessage = `Qdrant API Error: ${statusRecord.error}`;
+            }
           }
         }
       } else if ('statusText' in error && typeof (error as { statusText: unknown }).statusText === 'string' && errorStatus !== 500) {

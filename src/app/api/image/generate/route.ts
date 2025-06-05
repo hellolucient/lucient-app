@@ -129,9 +129,20 @@ export async function POST(request: NextRequest) {
       if (openaiError.error && typeof openaiError.error === 'object') {
         nestedError = openaiError.error as { message?: string; code?: string };
         errorDetails = nestedError.message;
-      } else if ((openaiError as any).response?.data?.error && typeof (openaiError as any).response.data.error === 'object') {
-        nestedError = (openaiError as any).response.data.error;
-        errorDetails = nestedError?.message;
+      } else {
+        // Fallback: Check for a more deeply nested structure.
+        const errorAsObject = openaiError as unknown as Record<string, unknown>; // Cast to unknown first
+        if (typeof errorAsObject.response === 'object' && errorAsObject.response !== null) {
+          const response = errorAsObject.response as Record<string, unknown>; 
+          if (typeof response.data === 'object' && response.data !== null) {
+            const data = response.data as Record<string, unknown>;
+            if (typeof data.error === 'object' && data.error !== null) {
+              // Assuming data.error has message and code, if they exist
+              nestedError = data.error as { message?: string; code?: string }; 
+              errorDetails = nestedError?.message;
+            }
+          }
+        }
       }
       
       if (errorStatus === 401) {
@@ -142,7 +153,18 @@ export async function POST(request: NextRequest) {
         errorMessage = `Your prompt was rejected by OpenAI\'s content policy. Please modify your prompt.`;
         errorDetails = nestedError?.message || 'Content policy violation'; // Ensure details has a value
       }
-      console.error(`Image API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, openaiError.error || (openaiError as any).response?.data?.error);
+      // Safely try to get the most relevant error object to log
+      let errorToLog: unknown = openaiError.error; // Default to APIError.error
+      if (!errorToLog && typeof openaiError === 'object' && openaiError !== null) {
+        const errorAsObjectForLog = openaiError as unknown as Record<string, unknown>; // Cast to unknown first
+        if (typeof errorAsObjectForLog.response === 'object' && errorAsObjectForLog.response !== null) {
+            const responseForLog = errorAsObjectForLog.response as Record<string, unknown>; 
+            if (typeof responseForLog.data === 'object' && responseForLog.data !== null && 'error' in responseForLog.data) {
+                errorToLog = (responseForLog.data as {error: unknown}).error;
+            }
+        }
+      }
+      console.error(`Image API: OpenAI APIError (Status ${errorStatus}): ${errorMessage}`, errorToLog);
     } else if (openaiError instanceof Error) {
       errorMessage = openaiError.message;
       console.error('Image API: Generic Error from OpenAI Image call:', errorMessage);

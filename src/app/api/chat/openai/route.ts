@@ -228,12 +228,4 @@ Please formulate your response based on the guidelines provided in your system i
     console.error("Error in OpenAI chat API:", error);
     return NextResponse.json({ error: errorMessage }, { status: errorCode });
   }
-}
-
-async function streamToString(stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
-  let result = "";
-  for await (const part of stream) {
-    result += part.choices[0]?.delta?.content || "";
-  }
-  return result;
 } 

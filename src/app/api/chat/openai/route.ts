@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const openai = new OpenAI({ apiKey });
-    const modelToUse = requestedModel || "gpt-3.5-turbo";
+    const modelToUse = requestedModel || "gpt-4o";
 
     const systemPrompt = `You are Lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
 

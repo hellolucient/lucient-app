@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signInWithEmail, signUpWithEmail } from "@/lib/supabase/auth"; // Assuming auth functions
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, Suspense } from "react";
 
-export default function LoginPage() {
+// Renamed the original component
+function LoginClientContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect_to") || "/";
@@ -137,5 +138,14 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// New default export component wrapping LoginClientContent with Suspense
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading page...</div>}>
+      <LoginClientContent />
+    </Suspense>
   );
 } 

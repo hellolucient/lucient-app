@@ -5,7 +5,7 @@ import { getDocumentChunks } from '@/lib/textProcessing/chunking';
 import { generateEmbedding } from '@/lib/ai/embeddingUtils';
 import { getQdrantClient } from '@/lib/vector/qdrantClient';
 import mammoth from 'mammoth'; // For .doc, .docx
-import pdf from 'pdf-parse'; // For .pdf
+import * as pdf from 'pdf-parse/lib/pdf-parse.js'; // For .pdf
 import { randomUUID } from 'crypto'; // Import randomUUID
 
 // Define PointStruct locally if import is problematic
@@ -25,7 +25,7 @@ const ALLOWED_FILE_TYPES = [
 ];
 
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
           cookieStore.set(name, value, options);
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set(name, '', options);
+          cookieStore.delete({ name, ...options });
         },
       },
     }
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         console.log('[API/DOCS_UPSERT] Word document parsed. Extracted text length: ', fileContent.length);
       } else if (file.type === 'application/pdf') {
         console.log('[API/DOCS_UPSERT] Parsing as PDF.');
-        const data = await pdf(Buffer.from(arrayBuffer)); // pdf-parse expects a Buffer
+        const data = await pdf.default(Buffer.from(arrayBuffer));
         fileContent = data.text;
         console.log('[API/DOCS_UPSERT] PDF parsed. Extracted text length:', fileContent.length);
       } else {

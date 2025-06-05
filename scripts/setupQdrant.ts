@@ -1,14 +1,16 @@
 import dotenv from 'dotenv';
 import path from 'path';
-import fs from 'fs'; // Import Node.js file system module
-import { ensureCollectionExists, getQdrantClient } from '../src/lib/vector/qdrantClient';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { ensureCollectionExists, getQdrantClient, QDRANT_COLLECTION_NAME, ensurePayloadIndexExists } from '../src/lib/vector/qdrantClient.js';
 
-// Determine the correct path to .env.local
-// __dirname is /Users/trentmunday/lucient/scripts
-// .env.local is in /Users/trentmunday/lucient/
-const envPath = path.resolve(__dirname, '../.env.local');
+// ESM way to get __dirname
+const __filename_esm = fileURLToPath(import.meta.url);
+const __dirname_esm = path.dirname(__filename_esm);
 
-// --- Manual File Read Debug --- 
+const envPath = path.resolve(__dirname_esm, '../.env.local');
+
+// --- Manual File Read Debug (can be removed if not needed) --- 
 console.log(`Manually checking file at: ${envPath}`);
 try {
   if (fs.existsSync(envPath)) {
@@ -23,18 +25,19 @@ try {
 // --- End Manual File Read Debug ---
 
 console.log(`Attempting to load .env.local with dotenv from: ${envPath}`);
-dotenv.config({ path: envPath, override: true, debug: true }); // Added debug for dotenv
+dotenv.config({ path: envPath, override: true, debug: true });
 
-const COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || "lucient_documents";
+// QDRANT_COLLECTION_NAME is now imported, so this line can be removed or serve as a fallback if the import fails for some reason
+// const LOCAL_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || "lucient_documents";
 
-async function getSamplePoints(collectionName: string = COLLECTION_NAME, limit: number = 5) {
+async function getSamplePoints(collectionName: string = QDRANT_COLLECTION_NAME, limit: number = 5) {
   const client = getQdrantClient();
   try {
     console.log(`\nAttempting to retrieve up to ${limit} sample points from '${collectionName}'...`);
     const scrollResult = await client.scroll(collectionName, {
       limit: limit,
-      with_payload: true, // So we can see what was stored
-      with_vector: false, // No need to see the full vector for confirmation
+      with_payload: true,
+      with_vector: false,
     });
 
     if (scrollResult.points && scrollResult.points.length > 0) {
@@ -59,9 +62,14 @@ async function main() {
   console.log("Starting Qdrant setup script...");
   console.log("QDRANT_URL from process.env:", process.env.QDRANT_URL);
   console.log("QDRANT_API_KEY from process.env is set:", !!process.env.QDRANT_API_KEY);
+  console.log(`Target Collection from import: ${QDRANT_COLLECTION_NAME}`);
   try {
-    await ensureCollectionExists();
-    await getSamplePoints();
+    await ensureCollectionExists(); // Uses QDRANT_COLLECTION_NAME by default
+    // Ensure payload index for 'fileName' exists
+    await ensurePayloadIndexExists(QDRANT_COLLECTION_NAME, "fileName", "keyword");
+    console.log("Payload index for 'fileName' ensured.");
+
+    await getSamplePoints(); // Uses QDRANT_COLLECTION_NAME by default
     console.log("Qdrant setup script completed successfully.");
   } catch (error) {
     console.error("Error during Qdrant setup script:", error);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,22 +9,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 // import { saveApiKey } from '@/lib/actions/userKeys'; 
 
 export default function ManageApiKeysPage() {
-  const [provider, setProvider] = useState('anthropic'); // Default to anthropic
+  // API Key Management State
+  const [provider, setProvider] = useState('anthropic');
   const [apiKey, setApiKey] = useState('');
-  const [label, setLabel] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [keyLabel, setKeyLabel] = useState(''); // Renamed from label to avoid conflict
+  const [isKeyLoading, setIsKeyLoading] = useState(false);
+  const [keyMessage, setKeyMessage] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState<string | null>(null);
 
-  const handleSubmit = async (event: FormEvent) => {
+  // Document Upload State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleApiKeySubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setIsLoading(true);
-    setMessage(null);
-    setError(null);
+    setIsKeyLoading(true);
+    setKeyMessage(null);
+    setKeyError(null);
 
     if (!apiKey) {
-      setError('API Key is required.');
-      setIsLoading(false);
+      setKeyError('API Key is required.');
+      setIsKeyLoading(false);
       return;
     }
 
@@ -34,82 +41,158 @@ export default function ManageApiKeysPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ provider, apiKey, label }),
+        body: JSON.stringify({ provider, apiKey, label: keyLabel }), // Use keyLabel here
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        setMessage(result.message || 'API Key saved successfully!');
-        setApiKey(''); // Clear the key after successful save
-        setLabel('');
+        setKeyMessage(result.message || 'API Key saved successfully!');
+        setApiKey('');
+        setKeyLabel('');
       } else {
-        setError(result.error || result.details || 'Failed to save API Key.');
+        setKeyError(result.error || result.details || 'Failed to save API Key.');
       }
     } catch (err) {
       console.error("Failed to save API key:", err);
-      setError('An unexpected error occurred while saving the API key. Check console for details.');
+      setKeyError('An unexpected error occurred while saving the API key. Check console for details.');
     } finally {
-      setIsLoading(false);
+      setIsKeyLoading(false);
+    }
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedFile(event.target.files[0]);
+      setUploadMessage(null);
+      setUploadError(null);
+    }
+  };
+
+  const handleDocumentUpload = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedFile) {
+      setUploadError('Please select a file to upload.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadMessage(null);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const response = await fetch('/api/documents/upsert', {
+        method: 'POST',
+        body: formData, // FormData will set the Content-Type header automatically
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setUploadMessage(result.message || `Successfully uploaded ${selectedFile.name}`);
+        setSelectedFile(null);
+        // Clear the file input visually (optional, depends on input styling)
+        const fileInput = document.getElementById('documentUpload') as HTMLInputElement;
+        if (fileInput) fileInput.value = ''; 
+      } else {
+        setUploadError(result.error || result.details || 'Failed to upload document.');
+      }
+    } catch (err) {
+      console.error("Failed to upload document:", err);
+      setUploadError('An unexpected error occurred while uploading the document. Check console for details.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-2xl">
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 text-primary">Manage API Keys</h1>
-      
-      <form onSubmit={handleSubmit} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
-        <div>
-          <Label htmlFor="provider">LLM Provider</Label>
-          <Select value={provider} onValueChange={setProvider}>
-            <SelectTrigger id="provider" className="mt-1">
-              <SelectValue placeholder="Select a provider" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-              <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>
-              {/* <SelectItem value="gemini">Google (Gemini)</SelectItem> */}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">Select the LLM provider for the API key.</p>
-        </div>
+    <div className="container mx-auto p-4 md:p-8 max-w-2xl space-y-12">
+      <section>
+        <h1 className="text-2xl md:text-3xl font-bold mb-6 text-primary">Manage API Keys</h1>
+        <form onSubmit={handleApiKeySubmit} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
+          <div>
+            <Label htmlFor="provider">LLM Provider</Label>
+            <Select value={provider} onValueChange={setProvider}>
+              <SelectTrigger id="provider" className="mt-1">
+                <SelectValue placeholder="Select a provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>
+                {/* <SelectItem value="gemini">Google (Gemini)</SelectItem> */}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Select the LLM provider for the API key.</p>
+          </div>
 
-        <div>
-          <Label htmlFor="apiKey">API Key</Label>
-          <Input
-            id="apiKey"
-            type="password" // Use password type to obscure the key
-            placeholder="Enter your API key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            required
-            className="mt-1"
-          />
-        </div>
+          <div>
+            <Label htmlFor="apiKey">API Key</Label>
+            <Input
+              id="apiKey"
+              type="password"
+              placeholder="Enter your API key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              required
+              className="mt-1"
+            />
+          </div>
 
-        <div>
-          <Label htmlFor="label">Label (Optional)</Label>
-          <Input
-            id="label"
-            type="text"
-            placeholder="e.g., My Personal Claude Key"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="mt-1"
-          />
-        </div>
+          <div>
+            <Label htmlFor="keyLabel">Label (Optional)</Label>
+            <Input
+              id="keyLabel"
+              type="text"
+              placeholder="e.g., My Personal Claude Key"
+              value={keyLabel}
+              onChange={(e) => setKeyLabel(e.target.value)}
+              className="mt-1"
+            />
+          </div>
 
-        {message && (
-          <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{message}</p>
-        )}
-        {error && (
-          <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{error}</p>
-        )}
+          {keyMessage && (
+            <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{keyMessage}</p>
+          )}
+          {keyError && (
+            <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{keyError}</p>
+          )}
 
-        <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>
-          {isLoading ? 'Saving...' : 'Save API Key'}
-        </Button>
-      </form>
+          <Button type="submit" className="w-full md:w-auto" disabled={isKeyLoading}>
+            {isKeyLoading ? 'Saving...' : 'Save API Key'}
+          </Button>
+        </form>
+      </section>
+
+      <section>
+        <h2 className="text-xl md:text-2xl font-bold mb-6 text-primary">Knowledge Base Document Upload</h2>
+        <form onSubmit={handleDocumentUpload} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
+          <div>
+            <Label htmlFor="documentUpload">Upload Document (.txt, .doc, .docx, .pdf)</Label>
+            <Input
+              id="documentUpload"
+              type="file"
+              accept=".txt,.doc,.docx,.pdf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileChange}
+              className="mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+            />
+            {selectedFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedFile.name} ({selectedFile.type})</p>}
+          </div>
+
+          {uploadMessage && (
+            <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{uploadMessage}</p>
+          )}
+          {uploadError && (
+            <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{uploadError}</p>
+          )}
+
+          <Button type="submit" className="w-full md:w-auto" disabled={isUploading || !selectedFile}>
+            {isUploading ? 'Uploading...' : 'Upload Document'}
+          </Button>
+        </form>
+      </section>
 
       {/* We can add a section here later to list/manage existing keys */}
     </div>

@@ -1,25 +1,59 @@
 // Placeholder for embedding functions
 // This could use OpenAI, LlamaIndex, or other embedding models
 
-// Example using a hypothetical OpenAI embedding function (adapt as needed)
-// import { openai } from './openai'; // Assuming openai.ts is set up
+import OpenAI from 'openai'; // Import the main OpenAI type if needed for types
+import { openai } from './openai'; // Use the pre-configured client from openai.ts
 
+// Recommended embedding model by OpenAI (as of late 2023/early 2024)
+const EMBEDDING_MODEL = "text-embedding-3-small";
+
+/**
+ * Generates an embedding for the given text using OpenAI's API.
+ * @param text The text to generate an embedding for.
+ * @returns A promise that resolves to an array of numbers representing the embedding.
+ * @throws An error if the embedding generation fails or no embedding is returned.
+ */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  console.log(`Generating embedding for: ${text.substring(0, 50)}...`);
-  // Replace with actual embedding generation logic
-  // For example, using OpenAI:
-  // const response = await openai.embeddings.create({
-  //   model: "text-embedding-ada-002",
-  //   input: text,
-  // });
-  // return response.data[0].embedding;
+  if (!text || typeof text !== 'string') {
+    throw new Error("Input text must be a non-empty string.");
+  }
 
-  // Placeholder: return a dummy embedding
-  // The length of this dummy embedding should match your chosen model's output dimension
-  // e.g., OpenAI's text-embedding-ada-002 produces 1536 dimensions.
-  // For Qdrant, ensure this matches the vector size in your collection.
-  await new Promise(resolve => setTimeout(resolve, 50)); // Simulate async operation
-  return Array(1536).fill(0).map(() => Math.random());
+  console.log(`Generating embedding for text snippet: "${text.substring(0, 80)}..." using ${EMBEDDING_MODEL}`);
+
+  try {
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: text.replace(/\n/g, ' '), // OpenAI recommends replacing newlines with a space for better performance
+      // dimensions: 1536 // Optional: text-embedding-3-small defaults to 1536, can be reduced for some use cases
+    });
+
+    if (response.data && response.data.length > 0 && response.data[0].embedding) {
+      console.log(`Successfully generated embedding of dimension ${response.data[0].embedding.length}`);
+      return response.data[0].embedding;
+    } else {
+      console.error("Failed to generate embedding or received an empty response from OpenAI.", response);
+      throw new Error("Failed to generate embedding: No embedding data received from OpenAI.");
+    }
+  } catch (error: any) {
+    console.error("Error generating embedding with OpenAI:", error.message);
+    // Consider re-throwing a more specific error or handling it based on the error type
+    throw new Error(`OpenAI embedding generation failed: ${error.message}`);
+  }
 }
+
+// Example of how you might use this for multiple texts (batching is often more efficient if API supports it directly)
+// export async function generateEmbeddingsForMultipleTexts(texts: string[]): Promise<number[][]> {
+//   // Note: openai.embeddings.create can take an array of strings as input directly.
+//   try {
+//     const response = await openai.embeddings.create({
+//       model: EMBEDDING_MODEL,
+//       input: texts.map(text => text.replace(/\n/g, ' ')),
+//     });
+//     return response.data.map(item => item.embedding);
+//   } catch (error: any) {
+//     console.error("Error generating batch embeddings with OpenAI:", error.message);
+//     throw new Error(`OpenAI batch embedding generation failed: ${error.message}`);
+//   }
+// }
 
 // Add other embedding related utility functions here 

@@ -2,10 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { decrypt } from '@/lib/encryption';
-import OpenAI from 'openai'; // Changed import
+import OpenAI from 'openai';
+import { queryTopK } from '@/lib/vector/queryTopK';
+
+const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
+const TOP_K_RESULTS = 3;
 
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies();
+  const cookieStore = cookies(); 
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,35 +20,29 @@ export async function POST(request: NextRequest) {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+          cookieStore.set(name, value, options);
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
+          cookieStore.set(name, '', options);
         },
       },
     }
   );
 
-  // 1. Authenticate user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-  if (userError) {
-    console.error('OpenAI Chat API: Error getting user:', userError.message);
-    return NextResponse.json({ error: 'Authentication failed.', details: userError.message }, { status: 500 });
-  }
-  if (!user) {
-    console.log('OpenAI Chat API: No user found.');
-    return NextResponse.json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
+  if (userError || !user) {
+    console.error('OpenAI Chat API: Error getting user:', userError?.message);
+    return NextResponse.json({ error: 'Authentication failed.', details: userError?.message }, { status: 500 });
   }
 
-  // 2. Get the user's message and selected model from the request body
   let userMessage: string;
   let requestedModel: string | undefined;
 
   try {
     const body = await request.json();
     userMessage = body.message;
-    requestedModel = body.model; // Expect an optional 'model' field
+    requestedModel = body.model;
 
     if (!userMessage || typeof userMessage !== 'string') {
       return NextResponse.json({ error: 'Message is required and must be a string.' }, { status: 400 });
@@ -56,14 +54,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  // 3. Retrieve and decrypt the API key
+  let retrievedContext = '';
+  try {
+    console.log(`OpenAI Chat API: Retrieving context for user message: "${userMessage.substring(0, 50)}..."`);
+    const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, QDRANT_COLLECTION_NAME);
+    
+    if (contextResults && contextResults.length > 0) {
+      retrievedContext = contextResults
+        .map(result => result.payload?.originalText as string)
+        .filter(text => text)
+        .join('\n\n---\n\n');
+      console.log(`OpenAI Chat API: Retrieved ${contextResults.length} context snippets.`);
+    } else {
+      console.log('OpenAI Chat API: No context found or an issue with retrieval.');
+    }
+  } catch (ragError: any) {
+    console.error('OpenAI Chat API: Error retrieving context from Qdrant:', ragError.message);
+    retrievedContext = 'No context retrieved due to an error.'; 
+  }
+
   let apiKey: string;
   try {
     const { data: apiKeyData, error: dbError } = await supabase
       .from('user_llm_api_keys')
       .select('encrypted_api_key, iv, auth_tag')
       .eq('user_id', user.id)
-      .eq('provider', 'openai') // Changed provider to 'openai'
+      .eq('provider', 'openai')
       .single();
 
     if (dbError) {
@@ -85,15 +101,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to decrypt OpenAI API key.', details: decryptionError.message }, { status: 500 });
   }
 
-  // 4. Call OpenAI API
   try {
     const openai = new OpenAI({ apiKey });
+    const modelToUse = requestedModel || "gpt-3.5-turbo";
+
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: `You are a helpful assistant. Use the following context to answer the user's question. If the context is not relevant or doesn't contain the answer, answer the question to the best of your ability without explicitly mentioning the context was insufficient.\n\nContext:\n${retrievedContext}`
+      },
+      {
+        role: "user",
+        content: userMessage
+      }
+    ];
     
-    const modelToUse = requestedModel || "gpt-3.5-turbo"; // Fallback to default if no model specified
+    console.log(`OpenAI Chat API: Sending to model ${modelToUse}. Original message: "${userMessage.substring(0,50)}...", Context retrieved: ${!!retrievedContext && retrievedContext !== 'No context retrieved due to an error.'}`);
 
     const chatCompletion = await openai.chat.completions.create({
-      model: modelToUse, // Use the determined model
-      messages: [{ role: "user", content: userMessage }],
+      model: modelToUse,
+      messages: messages,
+      max_tokens: 2048,
     });
 
     const responseText = chatCompletion.choices[0]?.message?.content?.trim() || '';
@@ -110,7 +138,6 @@ export async function POST(request: NextRequest) {
     } else if (openaiError.message) {
         errorMessage = openaiError.message;
     }
-    // The openaiError object might have more detailed error information in openaiError.error or openaiError.response.data
     return NextResponse.json({ error: errorMessage, details: openaiError.error?.message || openaiError.response?.data?.error?.message || openaiError.message }, { status: openaiError.status || 500 });
   }
 } 

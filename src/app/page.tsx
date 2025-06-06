@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useState, useEffect, FormEvent } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import TextareaAutosize from 'react-textarea-autosize';
 import Image from 'next/image';
 
 // Define a type for individual messages in the chat
@@ -28,6 +28,14 @@ const openAIModels = [
   { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
   // Add other models as needed, e.g., gpt-4o when available and desired
 ];
+
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center space-x-1">
+    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></div>
+  </div>
+);
 
 export default function HomePage() {
   // State for chat functionality
@@ -248,23 +256,30 @@ export default function HomePage() {
                 </div>
 
                 <form onSubmit={handleSendMessage} className="sticky bottom-6 w-full max-w-xl mx-auto">
-                  <div className="relative flex items-center">
-                    <Input
-                      type="text"
-                      placeholder={isLoading ? `${selectedProvider === 'anthropic' ? 'Claude' : (openAIModels.find(m => m.value === selectedOpenAIModel)?.label || 'OpenAI')} is thinking...` : "Ask anything..."}
+                  <div className="relative">
+                    <TextareaAutosize
                       value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      disabled={isLoading}
-                      className="flex-grow border border-border/50 bg-card rounded-full p-3.5 pl-5 pr-12 text-sm shadow-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:border-transparent outline-none transition-shadow duration-200 ease-in-out"
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder={isLoading ? `${selectedProvider === 'anthropic' ? 'Claude' : (openAIModels.find(m => m.value === selectedOpenAIModel)?.label || 'OpenAI')} is thinking...` : "Type your message..."}
+                      className="w-full p-3 pr-20 rounded-lg border border-border/70 focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none transition-shadow bg-background/80 backdrop-blur-sm"
                       aria-label="Chat message input"
+                      minRows={1}
+                      maxRows={5}
+                      disabled={isLoading}
                     />
                     <Button
                       type="submit"
+                      className="absolute top-1/2 right-2 transform -translate-y-1/2"
                       disabled={isLoading || !inputValue.trim()}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground p-2 rounded-full text-sm font-medium hover:bg-primary/90 shadow-md flex items-center justify-center aspect-square focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label="Send message"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="m18 11-6-6"/><path d="m6 11 6-6"/></svg>
+                      {isLoading ? <LoadingSpinner /> : 'Send'}
                     </Button>
                   </div>
                 </form>
@@ -272,50 +287,45 @@ export default function HomePage() {
             )}
 
             {currentMode === 'image' && (
-              <div className="w-full">
-                <form onSubmit={handleGenerateImage} className="space-y-4 mb-6">
-                  <div>
-                    <Label htmlFor="image-prompt">Image Prompt:</Label>
-                    <Input 
+              <div className="w-full max-w-xl mx-auto">
+                <form onSubmit={handleGenerateImage} className="mb-4">
+                  <Label htmlFor="image-prompt" className="mb-2 block">Image Prompt:</Label>
+                  <div className="relative">
+                    <TextareaAutosize
                       id="image-prompt"
-                      type="text"
                       value={imagePrompt}
-                      onChange={(e) => setImagePrompt(e.target.value)}
-                      placeholder="e.g., A high-quality photo of a cat wearing a tiny hat"
-                      disabled={isGeneratingImage}
-                      className="mt-1"
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setImagePrompt(e.target.value)}
+                      placeholder="e.g., A futuristic cityscape at sunset"
+                      className="w-full p-3 pr-28 rounded-lg border border-border/70 focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none transition-shadow bg-background/80 backdrop-blur-sm"
+                      aria-label="Image generation prompt"
+                      minRows={1}
+                      maxRows={5}
                     />
+                    <Button type="submit" className="absolute top-1/2 right-2 transform -translate-y-1/2" disabled={isGeneratingImage}>
+                      {isGeneratingImage ? 'Generating...' : 'Generate'}
+                    </Button>
                   </div>
-                  <Button type="submit" disabled={isGeneratingImage || !imagePrompt.trim()} className="w-full">
-                    {isGeneratingImage ? 'Generating Image...' : 'Generate Image'}
-                  </Button>
                 </form>
-
+                
                 {isGeneratingImage && (
-                  <div className="text-center p-4">
+                  <div className="text-center">
                     <p>Generating your image, please wait...</p>
-                    {/* Optional: Add a visual spinner component here */}
                   </div>
                 )}
 
                 {imageGenError && (
-                  <div className="mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md text-destructive">
-                    <p className="font-semibold">Error Generating Image:</p>
-                    <p className="text-sm">{imageGenError}</p>
+                  <div className="text-center p-3 rounded-lg bg-destructive text-destructive-foreground">
+                    <p><strong>Error:</strong> {imageGenError}</p>
                   </div>
                 )}
 
-                {generatedImageUrl && !isGeneratingImage && (
-                  <div className="mt-4 border rounded-lg overflow-hidden shadow-lg">
-                    <Image
-                      src={generatedImageUrl}
-                      alt={imagePrompt || 'Generated DALL·E image'}
-                      width={1024}
-                      height={1024}
-                      className="w-full h-auto object-contain max-h-[512px] md:max-h-[768px] mx-auto"
-                      priority
-                    />
-                    {imagePrompt && <p className="text-xs text-muted-foreground p-2 bg-card text-center">Prompt: {imagePrompt}</p>}
+                {generatedImageUrl && (
+                  <div className="mt-6 text-center">
+                    <h3 className="text-xl font-semibold mb-4">Generated Image</h3>
+                    <div className="relative w-full aspect-square rounded-lg overflow-hidden border">
+                       <Image src={generatedImageUrl} alt="Generated image" layout="fill" objectFit="contain" />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Right-click or long-press to save the image.</p>
                   </div>
                 )}
               </div>
@@ -323,11 +333,13 @@ export default function HomePage() {
           </>
         ) : (
           <div className="text-center">
-            <Button asChild size="lg">
-              <Link href="/login">
-                Sign In to Get Started
-              </Link>
-            </Button>
+            <p className="mb-4">
+              Please <Link href="/login" className="underline hover:text-primary transition-colors">log in</Link> to start a new chat session.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Built by <a href="https://www.trentmunday.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">Trent Munday</a>.
+              Powered by <a href="https://www.anthropic.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">Anthropic</a>, <a href="https://openai.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">OpenAI</a>, and <a href="https://qdrant.tech/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">Qdrant</a>.
+            </p>
           </div>
         )}
       </div>

@@ -18,6 +18,7 @@ interface ChatMessage {
 interface ChatRequestBody {
   message: string;
   model?: string; // Optional, as it's only for OpenAI
+  chatMode?: 'wellness' | 'general';
 }
 
 // Define available OpenAI models
@@ -46,6 +47,7 @@ export default function HomePage() {
   const [initialCheckDone, setInitialCheckDone] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'anthropic' | 'openai'>('openai');
   const [selectedOpenAIModel, setSelectedOpenAIModel] = useState<string>(openAIModels[0].value); // Default to first OpenAI model
+  const [chatMode, setChatMode] = useState<'wellness' | 'general'>('wellness');
 
   // State for page mode (chat or image generation)
   const [currentMode, setCurrentMode] = useState<'chat' | 'image'>('chat');
@@ -85,7 +87,10 @@ export default function HomePage() {
     setIsLoading(true);
 
     let apiEndpoint = '/api/chat';
-    const requestBody: ChatRequestBody = { message: newUserMessage.content };
+    const requestBody: ChatRequestBody = { 
+      message: newUserMessage.content,
+      chatMode: chatMode,
+    };
 
     if (selectedProvider === 'openai') {
       apiEndpoint = '/api/chat/openai';
@@ -240,9 +245,25 @@ export default function HomePage() {
                   )}
                 </div>
 
+                <div className="mb-4">
+                  <Label htmlFor="chat-mode-select">Chat Mode:</Label>
+                  <Select 
+                    value={chatMode} 
+                    onValueChange={(value: 'wellness' | 'general') => setChatMode(value)}
+                  >
+                    <SelectTrigger id="chat-mode-select" className="mt-1">
+                      <SelectValue placeholder="Select a chat mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wellness">Wellness Chat</SelectItem>
+                      <SelectItem value="general">General Chat</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border/50 rounded-lg bg-card/30 min-h-[300px]">
                   {messages.length === 0 && (
-                    <p className="text-muted-foreground text-center">No messages yet. Select a provider{selectedProvider === 'openai' && ', a model,'} and ask something!</p>
+                    <p className="text-muted-foreground text-center">No messages yet. Select your options and ask something!</p>
                   )}
                   {messages.map((msg, index) => (
                     <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] ${ 

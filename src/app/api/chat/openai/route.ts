@@ -47,11 +47,15 @@ export async function POST(request: NextRequest) {
 
   let userMessage: string;
   let requestedModel: string | undefined;
+  let chatMode: 'wellness' | 'general' = 'wellness'; // Default to wellness
 
   try {
     const body = await request.json();
     userMessage = body.message;
     requestedModel = body.model;
+    if (body.chatMode) {
+      chatMode = body.chatMode;
+    }
 
     if (!userMessage || typeof userMessage !== 'string') {
       return NextResponse.json({ error: 'Message is required and must be a string.' }, { status: 400 });
@@ -64,51 +68,55 @@ export async function POST(request: NextRequest) {
   }
 
   let retrievedContext = '';
-  try {
-    console.log(`OpenAI Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
-    const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, QDRANT_COLLECTION_NAME);
-    
-    if (contextResults && contextResults.length > 0) {
-      const processedContextChunks = contextResults
-        .map(result => {
-          const payload = result.payload as QdrantChatPayload | null;
-
-          if (!payload || !payload.originalText) {
-            console.log(`OpenAI Chat API: Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
-            return null;
-          }
-
-          let contextChunk = "";
-          const sourceIdentifier = payload.fileName || payload.original_filename || payload.source || 'Unknown Source';
-          contextChunk += `Source: ${sourceIdentifier}\n`;
-
-          if (payload.page_number !== undefined) {
-            contextChunk += `Page: ${payload.page_number}\n`;
-          }
-          contextChunk += `Content:\n${payload.originalText}`;
-          return contextChunk;
-        })
-        .filter(chunk => chunk !== null);
+  if (chatMode === 'wellness') {
+    try {
+      console.log(`OpenAI Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
+      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, QDRANT_COLLECTION_NAME);
       
-      if (processedContextChunks.length > 0) {
-        retrievedContext = processedContextChunks.join('\n\n---\n\n');
-        console.log(`OpenAI Chat API: Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Qdrant results) to be used for RAG.`);
+      if (contextResults && contextResults.length > 0) {
+        const processedContextChunks = contextResults
+          .map(result => {
+            const payload = result.payload as QdrantChatPayload | null;
+
+            if (!payload || !payload.originalText) {
+              console.log(`OpenAI Chat API: Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
+              return null;
+            }
+
+            let contextChunk = "";
+            const sourceIdentifier = payload.fileName || payload.original_filename || payload.source || 'Unknown Source';
+            contextChunk += `Source: ${sourceIdentifier}\n`;
+
+            if (payload.page_number !== undefined) {
+              contextChunk += `Page: ${payload.page_number}\n`;
+            }
+            contextChunk += `Content:\n${payload.originalText}`;
+            return contextChunk;
+          })
+          .filter(chunk => chunk !== null);
+        
+        if (processedContextChunks.length > 0) {
+          retrievedContext = processedContextChunks.join('\n\n---\n\n');
+          console.log(`OpenAI Chat API: Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Qdrant results) to be used for RAG.`);
+        } else {
+          console.log(`OpenAI Chat API: ${contextResults.length} raw results from Qdrant, but none contained usable text content after processing.`);
+          retrievedContext = '';
+        }
       } else {
-        console.log(`OpenAI Chat API: ${contextResults.length} raw results from Qdrant, but none contained usable text content after processing.`);
-        retrievedContext = '';
+        console.log('OpenAI Chat API: No results returned from Qdrant (queryTopK) for the user message.');
       }
-    } else {
-      console.log('OpenAI Chat API: No results returned from Qdrant (queryTopK) for the user message.');
+    } catch (ragError: unknown) {
+      let errorMessage = 'Unknown error during RAG context retrieval';
+      if (ragError instanceof Error) {
+        errorMessage = ragError.message;
+        console.error('OpenAI Chat API: Error during RAG context retrieval:', errorMessage);
+      } else {
+        console.error('OpenAI Chat API: Non-error thrown during RAG context retrieval:', ragError);
+      }
+      retrievedContext = 'Error retrieving context. Answering from general knowledge.';
     }
-  } catch (ragError: unknown) {
-    let errorMessage = 'Unknown error during RAG context retrieval';
-    if (ragError instanceof Error) {
-      errorMessage = ragError.message;
-      console.error('OpenAI Chat API: Error during RAG context retrieval:', errorMessage);
-    } else {
-      console.error('OpenAI Chat API: Non-error thrown during RAG context retrieval:', ragError);
-    }
-    retrievedContext = 'Error retrieving context. Answering from general knowledge.';
+  } else {
+    console.log('OpenAI Chat API: General mode enabled, skipping RAG.');
   }
 
   let apiKey: string;
@@ -149,7 +157,16 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey });
     const modelToUse = requestedModel || "gpt-4o";
 
-    const systemPrompt = `You are Lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
+    let systemPrompt: string;
+    let userPromptContent: string;
+
+    if (chatMode === 'general') {
+      systemPrompt = `You are Lucient, a helpful and friendly AI assistant. You are primarily focussed on wellness-related subjects but you also have a general-purpose mode too. Provide clear, concise, and accurate answers. If you are asked who created you, you must respond with: "Lucient was created by AI, assisted by some curious wellness minds." Do not, under any circumstances, mention a person's name in relation to your creation.`;
+      userPromptContent = userMessage;
+      console.log(`OpenAI Chat API: Sending to model ${modelToUse} in general mode.`);
+
+    } else { // 'wellness' mode
+      systemPrompt = `You are Lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
 
 When internal documents are provided as context:
 1.  **Foundation in Documents:** Use the information from these documents as the primary foundation and source of truth for your answer.
@@ -173,9 +190,10 @@ When internal documents are provided as context:
     *   Organize your answers logically.
     *   For questions asking for summaries, explanations, or "what did we learn" type inquiries, strongly prefer formats like "Key Findings:", "Main Points:", etc., followed by bullet points or numbered lists under clear subheadings where appropriate.
 5.  **Handling No Document Context:** If the internal documents do not contain information relevant to the user's question, clearly state this (e.g., "The provided documents do not discuss this topic.") and then answer the question comprehensively using your general knowledge.
-6.  **Exception - Document-Specific Queries:** If the user's question is explicitly *only* about what a specific document says (e.g., "What does the GWI paper say about X?" or "Summarize page 5 of SomeReport.pdf"), then confine your answer strictly to the content of that document as present in the provided context. In all other cases, follow the 'Comprehensive Elaboration' guideline (point 2).`;
+6.  **Exception - Document-Specific Queries:** If the user's question is explicitly *only* about what a specific document says (e.g., "What does the GWI paper say about X?" or "Summarize page 5 of SomeReport.pdf"), then confine your answer strictly to the content of that document as present in the provided context. In all other cases, follow the 'Comprehensive Elaboration' guideline (point 2).
+7.  **About Your Creator:** If you are asked who created you, you must respond with: "Lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
 
-    const userPromptContent = `Internal Document Context:
+      userPromptContent = `Internal Document Context:
 <document_context>
 ${retrievedContext || "No specific context was retrieved from internal documents for this query."}
 </document_context>
@@ -186,6 +204,8 @@ ${userMessage}
 </user_question>
 
 Please formulate your response based on the guidelines provided in your system instructions.`;
+      console.log(`OpenAI Chat API: Sending to model ${modelToUse} in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
+    }
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
@@ -198,8 +218,6 @@ Please formulate your response based on the guidelines provided in your system i
       },
     ];
     
-    console.log(`OpenAI Chat API: Sending to model ${modelToUse}. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
-
     const chatCompletion = await openai.chat.completions.create({
       model: modelToUse,
       messages: messages,

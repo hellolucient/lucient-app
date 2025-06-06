@@ -53,9 +53,13 @@ export async function POST(request: NextRequest) {
 
   // 2. Get the user's message from the request body
   let userMessage: string;
+  let chatMode: 'wellness' | 'general' = 'wellness'; // Default to wellness
   try {
     const body = await request.json();
     userMessage = body.message;
+    if (body.chatMode) {
+      chatMode = body.chatMode;
+    }
     if (!userMessage || typeof userMessage !== 'string') {
       return NextResponse.json({ error: 'Message is required and must be a string.' }, { status: 400 });
     }
@@ -65,54 +69,58 @@ export async function POST(request: NextRequest) {
 
   // --- RAG Implementation Start ---
   let retrievedContext = '';
-  try {
-    console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
-    const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, QDRANT_COLLECTION_NAME);
-    
-    if (contextResults && contextResults.length > 0) {
-      const processedContextChunks = contextResults
-        .map(result => {
-          const payload = result.payload as QdrantChatPayload | null;
+  if (chatMode === 'wellness') {
+    try {
+      console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
+      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, QDRANT_COLLECTION_NAME);
+      
+      if (contextResults && contextResults.length > 0) {
+        const processedContextChunks = contextResults
+          .map(result => {
+            const payload = result.payload as QdrantChatPayload | null;
 
-          if (!payload || !payload.originalText) {
-            console.log(`Chat API (Claude): Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
-            return null;
-          }
+            if (!payload || !payload.originalText) {
+              console.log(`Chat API (Claude): Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
+              return null;
+            }
 
-          let contextChunk = "";
-          const sourceIdentifier = payload.fileName || payload.original_filename || payload.source || 'Unknown Source';
-          contextChunk += `Source: ${sourceIdentifier}\n`;
+            let contextChunk = "";
+            const sourceIdentifier = payload.fileName || payload.original_filename || payload.source || 'Unknown Source';
+            contextChunk += `Source: ${sourceIdentifier}\n`;
 
-          if (payload.page_number !== undefined) {
-            contextChunk += `Page: ${payload.page_number}\n`;
-          }
-          contextChunk += `Content:\n${payload.originalText}`;
-          return contextChunk;
-        })
-        .filter(chunk => chunk !== null);
+            if (payload.page_number !== undefined) {
+              contextChunk += `Page: ${payload.page_number}\n`;
+            }
+            contextChunk += `Content:\n${payload.originalText}`;
+            return contextChunk;
+          })
+          .filter(chunk => chunk !== null);
 
-      if (processedContextChunks.length > 0) {
-        retrievedContext = processedContextChunks.join('\n\n---\n\n');
-        console.log(`Chat API (Claude): Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Qdrant results) to be used for RAG.`);
+        if (processedContextChunks.length > 0) {
+          retrievedContext = processedContextChunks.join('\n\n---\n\n');
+          console.log(`Chat API (Claude): Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Qdrant results) to be used for RAG.`);
+        } else {
+          console.log(`Chat API (Claude): ${contextResults.length} raw results from Qdrant, but none contained usable text content after processing.`);
+          retrievedContext = '';
+        }
       } else {
-        console.log(`Chat API (Claude): ${contextResults.length} raw results from Qdrant, but none contained usable text content after processing.`);
-        retrievedContext = '';
+        console.log('Chat API (Claude): No results returned from Qdrant (queryTopK) for the user message.');
       }
-    } else {
-      console.log('Chat API (Claude): No results returned from Qdrant (queryTopK) for the user message.');
-    }
-  } catch (ragError: unknown) {
-    let errorMessage = 'Unknown error during RAG context retrieval';
-    if (ragError instanceof Error) {
-      errorMessage = ragError.message;
-      console.error('Chat API (Claude): Error during RAG context retrieval:', errorMessage);
-      if (ragError.stack) {
-        // console.error('Chat API (Claude) Stack:', ragError.stack); // Optional: log stack trace
+    } catch (ragError: unknown) {
+      let errorMessage = 'Unknown error during RAG context retrieval';
+      if (ragError instanceof Error) {
+        errorMessage = ragError.message;
+        console.error('Chat API (Claude): Error during RAG context retrieval:', errorMessage);
+        if (ragError.stack) {
+          // console.error('Chat API (Claude) Stack:', ragError.stack); // Optional: log stack trace
+        }
+      } else {
+        console.error('Chat API (Claude): Non-error thrown during RAG context retrieval:', ragError);
       }
-    } else {
-      console.error('Chat API (Claude): Non-error thrown during RAG context retrieval:', ragError);
+      retrievedContext = 'Error retrieving context. Answering from general knowledge.';
     }
-    retrievedContext = 'Error retrieving context. Answering from general knowledge.';
+  } else {
+    console.log('Chat API (Claude): General mode enabled, skipping RAG.');
   }
   // --- RAG Implementation End ---
 
@@ -157,7 +165,16 @@ export async function POST(request: NextRequest) {
       apiKey,
     });
 
-    const systemPrompt = `You are Lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
+    let systemPrompt: string;
+    let userPromptContent: string;
+
+    if (chatMode === 'general') {
+      systemPrompt = `You are Lucient, a helpful and friendly AI assistant. You are primarily focussed on wellness-related subjects but you also have a general-purpose mode too. Provide clear, concise, and accurate answers. If you are asked who created you, you must respond with: "Lucient was created by AI, assisted by some curious wellness minds." Do not, under any circumstances, mention a person's name in relation to your creation.`;
+      userPromptContent = userMessage;
+      console.log('Chat API (Claude): Sending to Claude in general mode.');
+
+    } else { // 'wellness' mode
+      systemPrompt = `You are Lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
 
 When internal documents are provided as context:
 1.  **Foundation in Documents:** Use the information from these documents as the primary foundation and source of truth for your answer.
@@ -181,9 +198,10 @@ When internal documents are provided as context:
     *   Organize your answers logically.
     *   For questions asking for summaries, explanations, or "what did we learn" type inquiries, strongly prefer formats like "Key Findings:", "Main Points:", etc., followed by bullet points or numbered lists under clear subheadings where appropriate.
 5.  **Handling No Document Context:** If the internal documents do not contain information relevant to the user's question, clearly state this (e.g., "The provided documents do not discuss this topic.") and then answer the question comprehensively using your general knowledge.
-6.  **Exception - Document-Specific Queries:** If the user's question is explicitly *only* about what a specific document says (e.g., "What does the GWI paper say about X?" or "Summarize page 5 of SomeReport.pdf"), then confine your answer strictly to the content of that document as present in the provided context. In all other cases, follow the 'Comprehensive Elaboration' guideline (point 2).`;
+6.  **Exception - Document-Specific Queries:** If the user's question is explicitly *only* about what a specific document says (e.g., "What does the GWI paper say about X?" or "Summarize page 5 of SomeReport.pdf"), then confine your answer strictly to the content of that document as present in the provided context. In all other cases, follow the 'Comprehensive Elaboration' guideline (point 2).
+7.  **About Your Creator:** If you are asked who created you, you must respond with: "Lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
 
-    const userPromptContent = `Internal Document Context:
+      userPromptContent = `Internal Document Context:
 <document_context>
 ${retrievedContext || "No specific context was retrieved from internal documents for this query."}
 </document_context>
@@ -194,8 +212,8 @@ ${userMessage}
 </user_question>
 
 Please formulate your response based on the guidelines provided in your system instructions.`;
-
-    console.log(`Chat API (Claude): Sending to Claude. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
+      console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
+    }
     
     const claudeResponse = await anthropic.messages.create({
       model: "claude-3-opus-20240229", // Consider claude-3.5-sonnet for speed/cost if Opus is too much

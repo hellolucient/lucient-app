@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import TextareaAutosize from 'react-textarea-autosize';
@@ -57,6 +57,16 @@ export default function HomePage() {
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [imageGenError, setImageGenError] = useState<string | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     async function checkSession() {
@@ -183,9 +193,9 @@ export default function HomePage() {
         </div>
 
         {sessionExists ? (
-          <>
+          <div className="flex flex-col h-full flex-grow">
             {/* Mode Switcher (Tabs) */}
-            <div className="mb-6 flex justify-center space-x-2 border-b">
+            <div className="flex justify-center space-x-2 border-b">
               <Button 
                 variant={currentMode === 'chat' ? 'secondary' : 'ghost'}
                 onClick={() => setCurrentMode('chat')}
@@ -203,7 +213,7 @@ export default function HomePage() {
             </div>
 
             {currentMode === 'chat' && (
-              <>
+              <div className="flex flex-col h-full flex-grow mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <Label htmlFor="provider-select">LLM Provider:</Label>
@@ -274,9 +284,10 @@ export default function HomePage() {
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   ))}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                <form onSubmit={handleSendMessage} className="sticky bottom-6 w-full max-w-xl mx-auto">
+                <form onSubmit={handleSendMessage} className="mt-auto w-full max-w-xl mx-auto">
                   <div className="relative">
                     <TextareaAutosize
                       value={inputValue}
@@ -304,7 +315,7 @@ export default function HomePage() {
                     </Button>
                   </div>
                 </form>
-              </>
+              </div>
             )}
 
             {currentMode === 'image' && (
@@ -351,7 +362,7 @@ export default function HomePage() {
                 )}
               </div>
             )}
-          </>
+          </div>
         ) : (
           <div className="text-center">
             <p className="mb-4">

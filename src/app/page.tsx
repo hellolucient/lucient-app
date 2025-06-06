@@ -3,10 +3,20 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, FormEvent, useRef } from 'react';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import TextareaAutosize from 'react-textarea-autosize';
 import Image from 'next/image';
+import { ChevronDown, Check } from 'lucide-react';
 
 // Define a type for individual messages in the chat
 interface ChatMessage {
@@ -67,6 +77,14 @@ export default function HomePage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const getCurrentModelLabel = () => {
+    if (selectedProvider === 'anthropic') {
+      return 'Anthropic (Claude)';
+    }
+    const model = openAIModels.find(m => m.value === selectedOpenAIModel);
+    return model ? `OpenAI (${model.label})` : 'Select a model';
+  };
 
   useEffect(() => {
     async function checkSession() {
@@ -216,59 +234,57 @@ export default function HomePage() {
               <div className="flex flex-col h-full flex-grow mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <Label htmlFor="provider-select">LLM Provider:</Label>
+                    <Label htmlFor="provider-select">LLM Provider & Model:</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" id="provider-select" className="w-full justify-between mt-1">
+                          {getCurrentModelLabel()}
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                        <DropdownMenuItem onClick={() => setSelectedProvider('anthropic')}>
+                          Anthropic (Claude)
+                          {selectedProvider === 'anthropic' && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <span>OpenAI (ChatGPT)</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            {openAIModels.map(model => (
+                              <DropdownMenuItem
+                                key={model.value}
+                                onClick={() => {
+                                  setSelectedProvider('openai');
+                                  setSelectedOpenAIModel(model.value);
+                                }}
+                              >
+                                {model.label}
+                                {selectedProvider === 'openai' && selectedOpenAIModel === model.value && <Check className="ml-auto h-4 w-4" />}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="chat-mode-select">Chat Mode:</Label>
                     <Select 
-                      value={selectedProvider} 
-                      onValueChange={(value: 'anthropic' | 'openai') => {
-                        setSelectedProvider(value);
-                        // Optionally reset messages when provider changes
-                        // setMessages([]); 
-                      }}
+                      value={chatMode} 
+                      onValueChange={(value: 'wellness' | 'general') => setChatMode(value)}
                     >
-                      <SelectTrigger id="provider-select" className="mt-1">
-                        <SelectValue placeholder="Select a provider" />
+                      <SelectTrigger id="chat-mode-select" className="mt-1">
+                        <SelectValue placeholder="Select a chat mode" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-                        <SelectItem value="openai">OpenAI (ChatGPT)</SelectItem>
+                        <SelectItem value="wellness">Wellness Chat</SelectItem>
+                        <SelectItem value="general">General Chat</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {selectedProvider === 'openai' && (
-                    <div>
-                      <Label htmlFor="openai-model-select">OpenAI Model:</Label>
-                      <Select 
-                        value={selectedOpenAIModel} 
-                        onValueChange={(value: string) => setSelectedOpenAIModel(value)}
-                      >
-                        <SelectTrigger id="openai-model-select" className="mt-1">
-                          <SelectValue placeholder="Select an OpenAI model" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {openAIModels.map(model => (
-                            <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <Label htmlFor="chat-mode-select">Chat Mode:</Label>
-                  <Select 
-                    value={chatMode} 
-                    onValueChange={(value: 'wellness' | 'general') => setChatMode(value)}
-                  >
-                    <SelectTrigger id="chat-mode-select" className="mt-1">
-                      <SelectValue placeholder="Select a chat mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="wellness">Wellness Chat</SelectItem>
-                      <SelectItem value="general">General Chat</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border/50 rounded-lg bg-card/30 min-h-[300px]">

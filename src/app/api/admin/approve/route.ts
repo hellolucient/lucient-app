@@ -3,6 +3,15 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Define a specific interface for the invite options to avoid using 'any'
+interface InviteUserOptions {
+  redirectTo: string;
+  data: {
+    first_name: string;
+    last_name: string;
+  };
+}
+
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
@@ -67,7 +76,7 @@ export async function POST(request: Request) {
           first_name: firstName,
           last_name: lastName || '',
         }
-      } as any
+      } as InviteUserOptions
     );
 
     if (inviteError) {
@@ -83,8 +92,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'User invited successfully!', user: data.user });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Unexpected error in /api/admin/approve:', error);
-    return new NextResponse(JSON.stringify({ error: 'An unexpected error occurred.' }), { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return new NextResponse(JSON.stringify({ error: 'An unexpected error occurred.', details: errorMessage }), { status: 500 });
   }
 } 

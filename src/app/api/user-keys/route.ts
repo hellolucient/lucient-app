@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Changed import
 import { cookies } from 'next/headers';
-import { encrypt, decrypt } from '@/lib/encryption'; // Your encryption utility
+import { encrypt } from '@/lib/encryption'; // Your encryption utility
 import { getUserApiKey } from '@/lib/user-keys'; // Import the new function
 
 export async function GET(request: NextRequest) {

@@ -134,12 +134,15 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        console.error(`Chat API: Unknown user tier "${(userProfile as any).user_tier}" for user ${user.id}`);
+        // Use a type guard to be safe, though this case should not be hit
+        const tier = (userProfile as UserProfile)?.user_tier || 'unknown';
+        console.error(`Chat API: Unknown user tier "${tier}" for user ${user.id}`);
         return NextResponse.json({ error: 'Invalid user account tier.' }, { status: 500 });
     }
-  } catch (e: any) {
-    console.error('Chat API: Error in tier access logic:', e.message);
-    return NextResponse.json({ error: 'An error occurred while validating your access.', details: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'An unknown error occurred';
+    console.error('Chat API: Error in tier access logic:', message);
+    return NextResponse.json({ error: 'An error occurred while validating your access.', details: message }, { status: 500 });
   }
   // --- End Tier-based Access Control ---
 

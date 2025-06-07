@@ -133,7 +133,7 @@ export default function HomePage() {
         setUserProfile(prev => prev ? { ...prev, message_credits: prev.message_credits - 1 } : null);
       }
     }
-  }, [messages]);
+  }, [messages, userProfile?.user_tier]);
 
   const handleSendMessage = async (event?: FormEvent) => {
     if (event) event.preventDefault();

@@ -1,56 +1,44 @@
 "use client"; // May need client-side logic for auth state
 
-import { Button } from "@/components/ui/button";
-import { signOut as supabaseSignOut } from "@/lib/supabase/auth";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import createClient from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import React from 'react';
+import { User } from '@supabase/supabase-js';
 
 // Define the shape of the user profile prop
-type UserProfile = {
-  user_tier: 'free_trial' | 'byok' | 'vip_tester' | 'admin';
-  message_credits: number;
-  email: string | null;
-};
-
-// Define the component's props
-interface UserAuthButtonProps {
-  userProfile: UserProfile | null;
-  isLoading: boolean;
+interface UserProfile {
+  user_tier: string;
+  // Add other profile properties as needed
 }
 
-export default function UserAuthButton({ userProfile, isLoading }: UserAuthButtonProps) {
-  const router = useRouter();
+interface UserAuthButtonProps {
+  user: User | null;
+}
 
+export default function UserAuthButton({ user }: UserAuthButtonProps) {
+  
   const handleSignOut = async () => {
-    // The onAuthStateChange listener in Navbar will handle the state update
-    await supabaseSignOut();
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/'; // Redirect to home after sign out
   };
 
-  if (isLoading) {
-    return <Button variant="outline" size="sm" disabled>Loading...</Button>;
-  }
+  const handleSignIn = () => {
+    window.location.href = '/login';
+  };
 
-  if (userProfile) {
-    // Note: We don't have direct access to user.email here anymore.
-    // That would require passing it down from Navbar or fetching it separately if needed.
-    // For now, we'll just show the sign out button.
+  if (user) {
     return (
-      <div className="flex items-center gap-2">
-        {userProfile.email && (
-          <span className="text-sm text-muted-foreground hidden sm:inline">
-            {userProfile.email}
-          </span>
-        )}
-        <Button variant="outline" size="sm" onClick={handleSignOut}>
-          Sign Out
-        </Button>
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-muted-foreground hidden sm:inline">
+          Welcome!
+        </span>
+        <Button onClick={handleSignOut} variant="outline">Sign Out</Button>
       </div>
     );
   }
 
   return (
-    <Button asChild variant="outline" size="sm">
-      <Link href="/login">Sign In</Link>
-    </Button>
+    <Button onClick={handleSignIn}>Sign In</Button>
   );
 } 

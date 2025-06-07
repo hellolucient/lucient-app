@@ -1,12 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function SetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -63,8 +57,9 @@ export default function SetPasswordPage() {
         window.location.href = '/settings';
       }, 2000);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setError(message);
     } finally {
       setLoading(false);
     }

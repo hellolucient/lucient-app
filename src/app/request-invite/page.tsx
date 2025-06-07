@@ -22,19 +22,20 @@ export default function RequestInvitePage() {
       const response = await fetch('/api/request-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName, lastName, email }),
+        body: JSON.stringify({ email, firstName, lastName }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Something went wrong');
+        throw new Error(result.error || 'Failed to submit request.');
       }
 
       setIsSubmitted(true);
       
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      setError(message);
     } finally {
       setIsLoading(false);
     }

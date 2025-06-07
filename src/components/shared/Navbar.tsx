@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { Button } from '../ui/button';
+import { User } from '@supabase/supabase-js';
 
 interface NavLink {
   href: string;
@@ -21,7 +23,11 @@ type UserProfile = {
   last_name: string | null;
 };
 
-export default function Navbar() {
+type NavbarProps = {
+  user: User | null;
+};
+
+const Navbar = ({ user }: NavbarProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,8 +85,8 @@ export default function Navbar() {
   });
 
   return (
-    <nav className="bg-background border-b shadow-sm">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <header className="bg-background/80 backdrop-blur-sm sticky top-0 z-50 border-b">
+      <nav className="container mx-auto px-6 py-3 flex justify-between items-center">
         <Link href="/" className="text-xl font-bold text-primary">
           <em className="lowercase">lucient</em>
         </Link>
@@ -101,7 +107,7 @@ export default function Navbar() {
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
-      </div>
+      </nav>
 
       {/* Mobile Menu Overlay */}
       {isOpen && (
@@ -123,6 +129,8 @@ export default function Navbar() {
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
-} 
+}
+
+export default Navbar; 

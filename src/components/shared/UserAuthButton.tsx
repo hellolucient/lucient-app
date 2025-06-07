@@ -1,6 +1,6 @@
 "use client"; // May need client-side logic for auth state
 
-import createClient from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import React from 'react';
 import { User } from '@supabase/supabase-js';
@@ -12,7 +12,7 @@ interface UserAuthButtonProps {
 export default function UserAuthButton({ user }: UserAuthButtonProps) {
   
   const handleSignOut = async () => {
-    const supabase = createClient();
+    const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     window.location.href = '/'; // Redirect to home after sign out
   };

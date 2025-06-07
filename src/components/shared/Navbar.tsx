@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import UserAuthButton from './UserAuthButton';
-import { createClient } from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { User } from '@supabase/supabase-js';
 
 const Navbar = () => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
+    const supabase = getSupabaseClient();
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data.user);

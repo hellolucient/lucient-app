@@ -32,9 +32,8 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Get the current user session
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
+  // Get the current user by validating the session with the server
+  const { data: { user } } = await supabase.auth.getUser();
 
   const protectedRoutes = ['/dashboard', '/admin', '/tools', '/agents'];
   const isAdminRoute = pathname.startsWith('/admin');

@@ -1,8 +1,9 @@
+import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 const { fontFamily } = require("tailwindcss/defaultTheme")
 
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  darkMode: ["class"],
+const config: Config = {
+  darkMode: "class",
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -20,7 +21,7 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", ...fontFamily.sans],
+        sans: ["var(--font-sans)", ...(fontFamily.sans || [])],
       },
       keyframes: {
         "accordion-down": {
@@ -49,5 +50,7 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
-} 
+  plugins: [tailwindcssAnimate],
+};
+
+export default config; 

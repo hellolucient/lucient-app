@@ -1,7 +1,52 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Changed import
 import { cookies } from 'next/headers';
-import { encrypt } from '@/lib/encryption'; // Your encryption utility
+import { encrypt, decrypt } from '@/lib/encryption'; // Your encryption utility
+import { getUserApiKey } from '@/lib/user-keys'; // Import the new function
+
+export async function GET(request: NextRequest) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const provider = searchParams.get('provider');
+
+  if (!provider) {
+    return NextResponse.json({ error: 'Provider query parameter is required' }, { status: 400 });
+  }
+
+  try {
+    // Use the reusable function to get the key
+    const decryptedKey = await getUserApiKey(user.id, provider, supabase);
+
+    if (!decryptedKey) {
+      return NextResponse.json({ error: 'API key for this provider not found.' }, { status: 404 });
+    }
+    
+    // Return a masked version of the key for display purposes
+    return NextResponse.json({ apiKey: `...${decryptedKey.slice(-4)}` });
+
+  } catch (e) {
+    console.error('Error in GET /api/user-keys:', e);
+    return NextResponse.json({ error: 'Failed to process API key.' }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies(); // Await cookies

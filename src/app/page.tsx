@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import TextareaAutosize from 'react-textarea-autosize';
 import Image from 'next/image';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Info } from 'lucide-react';
 
 // Define a type for individual messages in the chat
 interface ChatMessage {
@@ -29,7 +29,14 @@ interface ChatRequestBody {
   message: string;
   model?: string; // Optional, as it's only for OpenAI
   chatMode?: 'wellness' | 'general';
+  provider?: 'anthropic' | 'openai';
 }
+
+// Add UserProfile type
+type UserProfile = {
+  user_tier: 'free_trial' | 'byok' | 'vip_tester' | 'admin';
+  message_credits: number;
+};
 
 // Define available OpenAI models
 const openAIModels = [
@@ -48,6 +55,13 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const FreeTrialIndicator = ({ credits }: { credits: number }) => (
+  <div className="flex items-center justify-center text-xs text-muted-foreground bg-secondary p-2 rounded-lg border border-border/60">
+    <Info className="h-4 w-4 mr-2" />
+    You have {credits} free messages remaining.
+  </div>
+);
+
 export default function HomePage() {
   // State for chat functionality
   const [inputValue, setInputValue] = useState('');
@@ -55,6 +69,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionExists, setSessionExists] = useState(false);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // Add profile state
   const [selectedProvider, setSelectedProvider] = useState<'anthropic' | 'openai'>('openai');
   const [selectedOpenAIModel, setSelectedOpenAIModel] = useState<string>(openAIModels[0].value); // Default to first OpenAI model
   const [chatMode, setChatMode] = useState<'wellness' | 'general'>('wellness');
@@ -87,23 +102,38 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    async function checkSession() {
+    async function checkSessionAndProfile() {
       try {
-        const response = await fetch('/api/auth/session');
+        // Fetch from the new profile endpoint
+        const response = await fetch('/api/user/profile');
         if (response.ok) {
           const data = await response.json();
-          setSessionExists(data.sessionExists);
+          setUserProfile(data.profile);
+          setSessionExists(true);
         } else {
+          setUserProfile(null);
           setSessionExists(false);
         }
       } catch (error) {
-        console.error("Error checking session:", error);
+        console.error("Error checking session and profile:", error);
         setSessionExists(false);
+        setUserProfile(null);
       }
       setInitialCheckDone(true);
     }
-    checkSession();
+    checkSessionAndProfile();
   }, []);
+
+  // When a message is successfully sent and we get a reply,
+  // if the user is on a free trial, we decrement their credits locally
+  // This provides immediate feedback without needing to re-fetch the profile.
+  useEffect(() => {
+    if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+      if (userProfile?.user_tier === 'free_trial') {
+        setUserProfile(prev => prev ? { ...prev, message_credits: prev.message_credits - 1 } : null);
+      }
+    }
+  }, [messages]);
 
   const handleSendMessage = async (event?: FormEvent) => {
     if (event) event.preventDefault();
@@ -114,14 +144,14 @@ export default function HomePage() {
     setInputValue('');
     setIsLoading(true);
 
-    let apiEndpoint = '/api/chat';
+    const apiEndpoint = '/api/chat'; // Always use the main chat endpoint
     const requestBody: ChatRequestBody = { 
       message: newUserMessage.content,
       chatMode: chatMode,
+      provider: selectedProvider, // Include the provider in the body
     };
 
     if (selectedProvider === 'openai') {
-      apiEndpoint = '/api/chat/openai';
       requestBody.model = selectedOpenAIModel; // Add selected OpenAI model to request
     }
 
@@ -287,6 +317,12 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                {userProfile?.user_tier === 'free_trial' && (
+                  <div className="mb-4">
+                    <FreeTrialIndicator credits={userProfile.message_credits} />
+                  </div>
+                )}
+
                 <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border/50 rounded-lg bg-card/30 min-h-[300px]">
                   {messages.length === 0 && (
                     <p className="text-muted-foreground text-center">No messages yet. Select your options and ask something!</p>
@@ -381,14 +417,24 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="text-center">
-            <p className="mb-4">
-              Please <Link href="/login" className="underline hover:text-primary transition-colors">log in</Link> to start a new chat session.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Built by <a href="https://www.trentmunday.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">Trent Munday</a>.
-              Powered by <a href="https://www.anthropic.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">Anthropic</a>, <a href="https://openai.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">OpenAI</a>, and <a href="https://qdrant.tech/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary transition-colors">Qdrant</a>.
-            </p>
+            {/* The old content for logged-out users is removed from here */}
+            {/* The new, combined content is below */}
           </div>
+        )}
+
+        {!sessionExists && (
+            <div className="mt-8 flex flex-col items-center gap-4 text-center">
+                <p className="text-muted-foreground">Please sign in to begin or request an invite.</p>
+                <div className="flex gap-4">
+                    <Button asChild>
+                        <Link href="/login">Sign In</Link>
+                    </Button>
+                    <Button asChild variant="secondary">
+                        <Link href="/request-invite">Request an Invite</Link>
+                    </Button>
+                </div>
+                {/* The "Built by" and "Powered by" lines have been completely removed. */}
+            </div>
         )}
       </div>
     </main>

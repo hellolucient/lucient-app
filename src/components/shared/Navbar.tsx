@@ -2,19 +2,81 @@
 
 import Link from 'next/link';
 import UserAuthButton from "@/components/shared/UserAuthButton";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
+
+interface NavLink {
+  href: string;
+  label: string;
+  adminOnly?: boolean;
+}
+
+type UserProfile = {
+  user_tier: 'free_trial' | 'byok' | 'vip_tester' | 'admin';
+  message_credits: number;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+};
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
-  const navLinks = [
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+
+    const fetchUserProfile = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch('/api/user/profile');
+        if (response.ok) {
+          const data = await response.json();
+          setUserProfile(data.profile);
+        } else {
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+        setUserProfile(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUserProfile();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUserProfile(null);
+        router.push('/');
+        router.refresh();
+      } else if (event === 'SIGNED_IN') {
+        fetchUserProfile();
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const allLinks: NavLink[] = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/tools", label: "Tools" },
     { href: "/agents", label: "Agents" },
-    { href: "/admin", label: "Admin" },
-    { href: "/settings/api-keys", label: "Settings" },
+    { href: "/admin", label: "Admin", adminOnly: true },
+    { href: "/settings", label: "Settings" },
   ];
+
+  const navLinks = allLinks.filter(link => {
+    if (!link.adminOnly) return true;
+    return userProfile?.user_tier === 'admin';
+  });
 
   return (
     <nav className="bg-background border-b shadow-sm">
@@ -30,7 +92,7 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          <UserAuthButton />
+          <UserAuthButton userProfile={userProfile} isLoading={isLoading} />
         </div>
 
         {/* Mobile Menu Button */}
@@ -49,14 +111,14 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                onClick={() => setIsOpen(false)} // Close menu on click
+                onClick={() => setIsOpen(false)}
                 className="block px-3 py-2 rounded-md text-base font-medium hover:text-primary hover:bg-muted"
               >
                 {link.label}
               </Link>
             ))}
             <div className="pt-4">
-              <UserAuthButton />
+              <UserAuthButton userProfile={userProfile} isLoading={isLoading} />
             </div>
           </div>
         </div>

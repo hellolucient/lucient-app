@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, FormEvent, ChangeEvent } from 'react';
+import { useState, FormEvent, ChangeEvent, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from 'next/link';
 // We'll create this API call function later
 // import { saveApiKey } from '@/lib/actions/userKeys'; 
+
+type UserProfile = {
+  user_tier: 'free_trial' | 'byok' | 'vip_tester' | 'admin';
+};
 
 export default function ManageApiKeysPage() {
   // API Key Management State
@@ -17,11 +22,29 @@ export default function ManageApiKeysPage() {
   const [keyMessage, setKeyMessage] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
 
+  // User profile state
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
   // Document Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchUserProfile() {
+      try {
+        const response = await fetch('/api/user/profile');
+        if (response.ok) {
+          const data = await response.json();
+          setUserProfile(data.profile);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+      }
+    }
+    fetchUserProfile();
+  }, []);
 
   const handleApiKeySubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -111,7 +134,14 @@ export default function ManageApiKeysPage() {
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-2xl space-y-12">
       <section>
-        <h1 className="text-2xl md:text-3xl font-bold mb-6 text-primary">Manage API Keys</h1>
+        <h1 className="text-2xl md:text-3xl font-bold mb-2 text-primary">Manage API Keys</h1>
+        <div className="text-muted-foreground mb-6 text-center bg-muted p-4 rounded-lg">
+          <p>If you have an API key, select your LLM and enter your API key.</p>
+          <p className="my-4">If not, click here...</p>
+          <Link href="/" passHref>
+            <Button>Try Lucient</Button>
+          </Link>
+        </div>
         <form onSubmit={handleApiKeySubmit} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
           <div>
             <Label htmlFor="provider">LLM Provider</Label>
@@ -166,33 +196,35 @@ export default function ManageApiKeysPage() {
         </form>
       </section>
 
-      <section>
-        <h2 className="text-xl md:text-2xl font-bold mb-6 text-primary">Knowledge Base Document Upload</h2>
-        <form onSubmit={handleDocumentUpload} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
-          <div>
-            <Label htmlFor="documentUpload">Upload Document (.txt, .doc, .docx, .pdf)</Label>
-            <Input
-              id="documentUpload"
-              type="file"
-              accept=".txt,.doc,.docx,.pdf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={handleFileChange}
-              className="mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-            />
-            {selectedFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedFile.name} ({selectedFile.type})</p>}
-          </div>
+      {userProfile?.user_tier === 'admin' && (
+        <section>
+          <h2 className="text-xl md:text-2xl font-bold mb-6 text-primary">Knowledge Base Document Upload</h2>
+          <form onSubmit={handleDocumentUpload} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
+            <div>
+              <Label htmlFor="documentUpload">Upload Document (.txt, .doc, .docx, .pdf)</Label>
+              <Input
+                id="documentUpload"
+                type="file"
+                accept=".txt,.doc,.docx,.pdf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleFileChange}
+                className="mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+              />
+              {selectedFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedFile.name} ({selectedFile.type})</p>}
+            </div>
 
-          {uploadMessage && (
-            <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{uploadMessage}</p>
-          )}
-          {uploadError && (
-            <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{uploadError}</p>
-          )}
+            {uploadMessage && (
+              <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{uploadMessage}</p>
+            )}
+            {uploadError && (
+              <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{uploadError}</p>
+            )}
 
-          <Button type="submit" className="w-full md:w-auto" disabled={isUploading || !selectedFile}>
-            {isUploading ? 'Uploading...' : 'Upload Document'}
-          </Button>
-        </form>
-      </section>
+            <Button type="submit" className="w-full md:w-auto" disabled={isUploading || !selectedFile}>
+              {isUploading ? 'Uploading...' : 'Upload Document'}
+            </Button>
+          </form>
+        </section>
+      )}
 
       {/* We can add a section here later to list/manage existing keys */}
     </div>

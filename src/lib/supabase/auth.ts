@@ -59,24 +59,7 @@ export async function isUserAdmin(): Promise<boolean> {
   return false;
 }
 
-// Add other auth related functions: signUp, signIn, signOut, passwordReset, etc.
-
-export async function signUpWithEmail(email: string, password: string): Promise<AuthActionResponse> {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.signUp({
-    email: email,
-    password: password,
-    // options: {
-    //   emailRedirectTo: `${window.location.origin}/auth/callback`,
-    // }
-  });
-  if (error) {
-    console.error("Error signing up:", error.message);
-    throw error;
-  }
-  console.log("Sign up successful, user needs to confirm email (if enabled):", data.user);
-  return { data, error };
-}
+// Add other auth related functions: signIn, signOut, passwordReset, etc.
 
 export async function signInWithEmail(email: string, password: string): Promise<AuthActionResponse> {
   const supabase = getSupabaseClient();

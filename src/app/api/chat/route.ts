@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { decrypt } from '@/lib/encryption';
+import { getUserApiKey } from '@/lib/user-keys';
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { queryTopK } from '@/lib/vector/queryTopK';
 
 // Define a more specific type for the Qdrant payload
@@ -17,6 +18,12 @@ interface QdrantChatPayload {
 
 const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
 const TOP_K_RESULTS = 5;
+
+// Define a type for our user profile data
+type UserProfile = {
+  user_tier: 'free_trial' | 'byok' | 'vip_tester' | 'admin';
+  message_credits: number;
+};
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -51,11 +58,95 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
   }
 
+  // --- Tier-based Access Control ---
+  let apiKey: string;
+  let modelToUse: string;
+  let provider: 'openai' | 'anthropic';
+
+  // Read the request body ONCE and store it.
+  const body = await request.json();
+
+  try {
+    // 1. Fetch user profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_tier, message_credits')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error('Chat API: Error fetching user profile:', profileError?.message);
+      // If profile doesn't exist, we can create one with default free_trial status
+      // For now, we'll error out.
+      return NextResponse.json({ error: 'Failed to find user profile.' }, { status: 500 });
+    }
+
+    const userProfile = profile as UserProfile;
+
+    switch (userProfile.user_tier) {
+      case 'free_trial':
+        if (userProfile.message_credits <= 0) {
+          return NextResponse.json({ error: 'Your free trial has ended. Please add your own API key to continue.' }, { status: 403 });
+        }
+        // Decrement credits
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ message_credits: userProfile.message_credits - 1 })
+          .eq('id', user.id);
+        if (updateError) {
+          console.error('Chat API: Failed to decrement message credits:', updateError.message);
+          // Non-fatal, but log it.
+        }
+        apiKey = process.env.OPENAI_API_KEY!;
+        modelToUse = 'gpt-4o';
+        provider = 'openai';
+        if (!apiKey) throw new Error('Free trial key (OPENAI_API_KEY) is not configured.');
+        break;
+
+      case 'byok':
+        // For BYOK, the client should specify the provider, default to openai
+        const requestedProvider = body.provider || 'openai';
+        provider = requestedProvider;
+
+        const userApiKey = await getUserApiKey(user.id, provider, supabase);
+        if (!userApiKey) {
+          return NextResponse.json({ error: `API key for ${provider} not found. Please add it in your settings.` }, { status: 404 });
+        }
+        apiKey = userApiKey;
+        modelToUse = body.model || (provider === 'openai' ? 'gpt-4o' : 'claude-3-5-sonnet-20240620');
+        break;
+      
+      case 'vip_tester':
+      case 'admin':
+        // VIPs and Admins use our internal keys
+        const vipProvider = body.provider || 'openai';
+        provider = vipProvider;
+
+        if (provider === 'anthropic') {
+            apiKey = process.env.ANTHROPIC_API_KEY!;
+            if (!apiKey) throw new Error('Anthropic API Key for admins/VIPs is not configured.');
+            modelToUse = body.model || 'claude-3-5-sonnet-20240620';
+        } else { // Default to OpenAI
+            apiKey = process.env.OPENAI_API_KEY!;
+            if (!apiKey) throw new Error('OpenAI API Key for admins/VIPs is not configured.');
+            modelToUse = body.model || 'gpt-4o';
+        }
+        break;
+
+      default:
+        console.error(`Chat API: Unknown user tier "${(userProfile as any).user_tier}" for user ${user.id}`);
+        return NextResponse.json({ error: 'Invalid user account tier.' }, { status: 500 });
+    }
+  } catch (e: any) {
+    console.error('Chat API: Error in tier access logic:', e.message);
+    return NextResponse.json({ error: 'An error occurred while validating your access.', details: e.message }, { status: 500 });
+  }
+  // --- End Tier-based Access Control ---
+
   // 2. Get the user's message from the request body
   let userMessage: string;
   let chatMode: 'wellness' | 'general' = 'wellness'; // Default to wellness
   try {
-    const body = await request.json();
     userMessage = body.message;
     if (body.chatMode) {
       chatMode = body.chatMode;
@@ -124,57 +215,22 @@ export async function POST(request: NextRequest) {
   }
   // --- RAG Implementation End ---
 
-  // 3. Retrieve and decrypt the API key
-  let apiKey: string;
+  // 4. Call LLM API (now dynamic)
   try {
-    const { data: apiKeyData, error: dbError } = await supabase
-      .from('user_llm_api_keys')
-      .select('encrypted_api_key, iv, auth_tag')
-      .eq('user_id', user.id)
-      .eq('provider', 'anthropic')
-      .single();
-
-    if (dbError) {
-      console.error('Chat API: DB error fetching API key:', dbError.message);
-      return NextResponse.json({ error: 'Failed to retrieve API key.', details: dbError.message }, { status: 500 });
-    }
-    if (!apiKeyData) {
-      return NextResponse.json({ error: 'Anthropic API key not found for this user.' }, { status: 404 });
-    }
-
-    apiKey = decrypt({
-      encryptedText: apiKeyData.encrypted_api_key,
-      iv: apiKeyData.iv,
-      authTag: apiKeyData.auth_tag,
-    });
-
-  } catch (decryptionError: unknown) {
-    let errorDetails = 'Unknown decryption error';
-    if (decryptionError instanceof Error) {
-      errorDetails = decryptionError.message;
-      console.error('Chat API: Decryption failed:', errorDetails);
-    } else {
-      console.error('Chat API: Non-error thrown during decryption:', decryptionError);
-    }
-    return NextResponse.json({ error: 'Failed to decrypt API key.', details: errorDetails }, { status: 500 });
-  }
-
-  // 4. Call Claude API
-  try {
-    const anthropic = new Anthropic({
-      apiKey,
-    });
-
+    // This part constructs the prompts, which can be complex.
+    // It's kept outside the provider-specific blocks if parts are shared.
     let systemPrompt: string;
     let userPromptContent: string;
 
-    if (chatMode === 'general') {
-      systemPrompt = `You are Lucient, a helpful and friendly AI assistant. You are primarily focussed on wellness-related subjects but you also have a general-purpose mode too. Provide clear, concise, and accurate answers. If you are asked who created you, you must respond with: "Lucient was created by AI, assisted by some curious wellness minds." Do not, under any circumstances, mention a person's name in relation to your creation.`;
-      userPromptContent = userMessage;
-      console.log('Chat API (Claude): Sending to Claude in general mode.');
+    if (provider === 'anthropic') {
+      const anthropic = new Anthropic({ apiKey });
 
-    } else { // 'wellness' mode
-      systemPrompt = `You are Lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
+      if (chatMode === 'general') {
+        systemPrompt = `You are lucient, a helpful and friendly AI assistant. You are primarily focussed on wellness-related subjects but you also have a general-purpose mode too. Provide clear, concise, and accurate answers. If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not, under any circumstances, mention a person's name in relation to your creation.`;
+        userPromptContent = userMessage;
+        console.log('Chat API (Claude): Sending to Claude in general mode.');
+      } else { // 'wellness' mode
+        systemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries, similar in quality and detail to leading AI models.
 
 When internal documents are provided as context:
 1.  **Foundation in Documents:** Use the information from these documents as the primary foundation and source of truth for your answer.
@@ -199,9 +255,9 @@ When internal documents are provided as context:
     *   For questions asking for summaries, explanations, or "what did we learn" type inquiries, strongly prefer formats like "Key Findings:", "Main Points:", etc., followed by bullet points or numbered lists under clear subheadings where appropriate.
 5.  **Handling No Document Context:** If the internal documents do not contain information relevant to the user's question, clearly state this (e.g., "The provided documents do not discuss this topic.") and then answer the question comprehensively using your general knowledge.
 6.  **Exception - Document-Specific Queries:** If the user's question is explicitly *only* about what a specific document says (e.g., "What does the GWI paper say about X?" or "Summarize page 5 of SomeReport.pdf"), then confine your answer strictly to the content of that document as present in the provided context. In all other cases, follow the 'Comprehensive Elaboration' guideline (point 2).
-7.  **About Your Creator:** If you are asked who created you, you must respond with: "Lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
+7.  **About Your Creator:** If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
 
-      userPromptContent = `Internal Document Context:
+        userPromptContent = `Internal Document Context:
 <document_context>
 ${retrievedContext || "No specific context was retrieved from internal documents for this query."}
 </document_context>
@@ -212,59 +268,51 @@ ${userMessage}
 </user_question>
 
 Please formulate your response based on the guidelines provided in your system instructions.`;
-      console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
-    }
-    
-    const claudeResponse = await anthropic.messages.create({
-      model: "claude-3-opus-20240229", // Consider claude-3.5-sonnet for speed/cost if Opus is too much
-      max_tokens: 3072, // Increased max_tokens for more comprehensive answers
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: userPromptContent,
-        },
-      ],
-    });
+        console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
+      }
 
-    let responseText = '';
-    if (claudeResponse.content && claudeResponse.content.length > 0) {
+      const claudeResponse = await anthropic.messages.create({
+        model: modelToUse,
+        max_tokens: 3072,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPromptContent }],
+      });
+
+      let responseText = '';
+      if (claudeResponse.content && claudeResponse.content.length > 0) {
         const firstTextBlock = claudeResponse.content.find(block => block.type === 'text') as Anthropic.TextBlock | undefined;
         if (firstTextBlock) {
-            responseText = firstTextBlock.text;
+          responseText = firstTextBlock.text;
         }
-    }
-    
-    if (!responseText && claudeResponse.stop_reason) {
-        console.log(`Chat API: Claude response ended with reason: ${claudeResponse.stop_reason}`);
-    }
-
-    return NextResponse.json({ reply: responseText, fullResponse: claudeResponse }, { status: 200 });
-
-  } catch (claudeError: unknown) {
-    console.error('Chat API: Claude API error object:', claudeError); // Log the raw error object for inspection
-
-    let errorMessage = 'Failed to get response from Claude API.';
-    let errorStatus = 500;
-    let errorDetails: string | undefined = undefined;
-
-    if (claudeError instanceof Anthropic.APIError) {
-      errorMessage = claudeError.message || errorMessage;
-      errorStatus = claudeError.status || errorStatus;
-      if (claudeError.error && typeof claudeError.error === 'object' && 'message' in claudeError.error) {
-        errorDetails = (claudeError.error as { message?: string }).message;
       }
-      if (errorStatus === 401) {
-        errorMessage = 'Claude API authentication failed. Please check your API key.';
+      return NextResponse.json({ reply: responseText, fullResponse: claudeResponse }, { status: 200 });
+
+    } else if (provider === 'openai') {
+      const openai = new OpenAI({ apiKey });
+
+      // NOTE: The RAG context and complex prompting is not yet implemented for OpenAI.
+      // This is a simplified path for now.
+      if (chatMode === 'wellness') {
+        systemPrompt = `You are a wellness assistant. The user has provided the following context from internal documents: \n\n${retrievedContext}\n\n Answer the user's question based on this context.`;
+        userPromptContent = userMessage;
+      } else {
+        systemPrompt = "You are lucient, a helpful AI assistant.";
+        userPromptContent = userMessage;
       }
-      console.error(`Chat API: Anthropic APIError (Status ${errorStatus}): ${errorMessage}`, claudeError.error);
-    } else if (claudeError instanceof Error) {
-      errorMessage = claudeError.message;
-      console.error('Chat API: Generic Error from Claude call:', errorMessage);
+
+      const openAiResponse = await openai.chat.completions.create({
+        model: modelToUse,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPromptContent }],
+        max_tokens: 3072,
+      });
+
+      const responseText = openAiResponse.choices[0]?.message?.content || '';
+      return NextResponse.json({ reply: responseText, fullResponse: openAiResponse }, { status: 200 });
     } else {
-      console.error('Chat API: Non-standard error thrown from Claude call:', claudeError);
+      return NextResponse.json({ error: `Unsupported provider: ${provider}` }, { status: 400 });
     }
-
-    return NextResponse.json({ error: errorMessage, details: errorDetails || errorMessage }, { status: errorStatus });
+  } catch (llmError: unknown) {
+    console.error(`Chat API: Error with ${provider} API:`, llmError);
+    return NextResponse.json({ error: `Failed to get response from ${provider} API.` }, { status: 500 });
   }
 } 

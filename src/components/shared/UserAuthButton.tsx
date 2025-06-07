@@ -5,12 +5,6 @@ import { Button } from '@/components/ui/button';
 import React from 'react';
 import { User } from '@supabase/supabase-js';
 
-// Define the shape of the user profile prop
-interface UserProfile {
-  user_tier: string;
-  // Add other profile properties as needed
-}
-
 interface UserAuthButtonProps {
   user: User | null;
 }

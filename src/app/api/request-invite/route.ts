@@ -2,19 +2,18 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-// Create a single Supabase client for this admin-level route
-// Note: We use the SERVICE_ROLE_KEY for admin actions like inserting into a protected table
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
-// Instantiate Resend
+// Instantiate Resend - this is safe to do here as it only uses the key when a method is called
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL_TO = 'app.access@hellolucient.com';
+const ADMIN_EMAIL_to = 'app.access@hellolucient.com';
 const FROM_EMAIL = 'lucient <noreply@hellolucient.com>'; // Using your verified domain
 
 export async function POST(request: NextRequest) {
+  // Initialize Supabase client inside the handler
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
   try {
     const { firstName, lastName, email } = await request.json();
 
@@ -54,7 +53,7 @@ export async function POST(request: NextRequest) {
         // Email 1: Send notification to the Admin
         resend.emails.send({
           from: FROM_EMAIL,
-          to: ADMIN_EMAIL_TO,
+          to: ADMIN_EMAIL_to,
           subject: 'New Invite Request for lucient',
           html: `
             <h1>New Invite Request</h1>

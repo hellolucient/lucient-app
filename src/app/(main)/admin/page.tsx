@@ -105,7 +105,7 @@ export default function AdminPage() {
           <h2 className="text-xl font-semibold text-destructive">Failed to Load Data</h2>
           <p className="text-muted-foreground">{error}</p>
           <p className="mt-4 text-sm text-muted-foreground">
-            Only users with the 'admin' tier can view this page.
+            Only users with the &apos;admin&apos; tier can view this page.
           </p>
         </div>
       </div>

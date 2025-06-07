@@ -17,6 +17,15 @@
 
 ## Implemented Features
 
+*   **User Onboarding and Management**:
+    *   **Invite Request System**: A public page (`/request-invite`) allows new users to request access.
+    *   **Admin Approval Panel**: A secure page (`/admin`) for administrators to view pending invite requests and approve them.
+    *   **Automated Invitation Flow**:
+        *   Upon approval, the system automatically sends an invitation email to the user via Supabase Auth.
+        *   The invitation link directs the user to a dedicated page (`/set-password`) to create their password.
+        *   After successfully setting a password, the user is redirected to their settings page (`/settings`).
+    *   **Free Trial**: New users receive 20 free message credits to use the service without needing their own API key. This is powered by the platform's internal OpenAI API key. The estimated cost for the platform is approximately $0.30 per user for the full 20 messages.
+    *   **Automated Profile Creation**: A database trigger (`handle_new_user` on `auth.users`) automatically creates a corresponding public profile for every new user.
 *   **User Authentication**: Secure sign-up, login, and logout via Supabase.
 *   **API Key Management**:
     *   Users can save and manage their API keys for LLM providers (Anthropic, OpenAI) in their settings.
@@ -64,25 +73,30 @@
 ├── src/
 │   ├── app/
 │   │   ├── (main)/
-│   │   │   ├── settings/api-keys/page.tsx # API Key and Document Upload UI
+│   │   │   ├── admin/page.tsx             # Admin dashboard for approving invites
+│   │   │   ├── settings/page.tsx          # API Key and Document Upload UI
 │   │   │   └── page.tsx                   # Main Chat/Image Generation UI
 │   │   ├── api/
-│   │   │   ├── auth/session/route.ts    # Client-side session check
-│   │   │   ├── chat/                    # Chat backend (Claude, OpenAI)
-│   │   │   │   ├── openai/route.ts
-│   │   │   │   └── route.ts             # Claude route
-│   │   │   ├── documents/upsert/route.ts# Document upload and embedding
-│   │   │   ├── image/generate/route.ts  # DALL-E image generation
-│   │   │   └── user-keys/route.ts       # API key saving
+│   │   │   ├── admin/
+│   │   │   │   ├── approve/route.ts       # Approves a user invite
+│   │   │   │   └── invites/route.ts       # Fetches pending invites for the admin panel
+│   │   │   ├── chat/route.ts              # Handles all chat logic (Anthropic, OpenAI)
+│   │   │   ├── documents/upsert/route.ts  # Document upload and embedding
+│   │   │   ├── image/generate/route.ts    # DALL-E image generation
+│   │   │   ├── request-invite/route.ts    # Handles new user invite requests
+│   │   │   ├── set-password/route.ts      # Sets the user's password from the invite flow
+│   │   │   └── user-keys/route.ts         # API key saving
+│   │   ├── login/                         # Login page and logic
+│   │   ├── request-invite/page.tsx        # UI for users to request an invite
+│   │   └── set-password/page.tsx          # UI for new users to set their password
 │   ├── lib/
 │   │   ├── ai/                          # AI logic (OpenAI client, embedding utils)
 │   │   │   ├── embeddingUtils.ts
 │   │   │   └── openai.ts
 │   │   ├── supabase/                    # Supabase client and auth helpers (ssr)
+│   │   ├── user-keys.ts                   # Helpers for user API key management
 │   │   ├── vector/                      # Qdrant client, collection setup, querying
-│   │   │   └── qdrantClient.ts
-│   │   ├── textProcessing/              # Text chunking logic
-│   │   │   └── chunking.ts
+│   │   └── textProcessing/              # Text chunking logic
 │   └── middleware.ts                    # Route protection
 ├── ... (other standard Next.js files and folders)
 ```
@@ -180,5 +194,10 @@ Look for the "Attempting to retrieve up to 5 sample points..." section in the ou
     *   Embeddings: `src/lib/ai/embeddingUtils.ts`
     *   Qdrant Client & Queries: `src/lib/vector/qdrantClient.ts`, `src/lib/vector/query.ts`
 *   **Qdrant Management Script**: `scripts/setupQdrant.ts`
+
+## Known Issues & Future Improvements
+
+*   **Conversational Context**: The AI can sometimes fail to track conversational context. For example, when asked "who created it?" after a question about "lucient", it may not correctly infer that "it" refers to "lucient". This needs to be improved, likely through better prompt engineering or state management.
+*   **Response Accuracy**: The AI may provide incorrect information about its own origins, stating it was created by a large company like OpenAI. The system prompt needs to be reinforced to ensure it always gives the correct, branded answer.
 
 This README provides an overview of the `lucient` project's current state.

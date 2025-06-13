@@ -28,7 +28,7 @@ function LoginClientContent() {
       if (result.error) {
         setError(result.error.message);
       } else if (result.data?.user) {
-        router.push(redirectTo);
+        router.refresh();
       } else {
         setError("Sign in failed. Please try again.");
       }

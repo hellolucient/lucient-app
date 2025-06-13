@@ -3,9 +3,14 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 // import { isUserAdmin } from './lib/supabase/auth'; // Can't be used directly in middleware due to edge runtime limitations
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  // Create a response object that we can modify
+  const response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
-  // Create a Supabase client configured to use cookies
+  // Create a Supabase client that can read/write cookies from the request/response
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -14,15 +19,17 @@ export async function middleware(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value;
         },
+        // Correct: Set cookies on the outgoing response
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
+          response.cookies.set({
             name,
             value,
             ...options,
           });
         },
+        // Correct: Remove cookies on the outgoing response
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({
+          response.cookies.set({
             name,
             value: '',
             ...options,
@@ -32,9 +39,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Get the current user by validating the session with the server
+  // This will now correctly refresh the session and set the cookie on the response
   const { data: { user } } = await supabase.auth.getUser();
-
+  
+  const { pathname } = request.nextUrl;
   const protectedRoutes = ['/dashboard', '/admin', '/tools', '/agents'];
   const isAdminRoute = pathname.startsWith('/admin');
 
@@ -67,7 +75,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  return NextResponse.next();
+  // Return the response, which now has the updated auth cookies
+  return response;
 }
 
 export const config = {

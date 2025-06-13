@@ -13,6 +13,8 @@ export async function GET() {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
+          set() {}, // No-op, will set cookies in response below
+          remove() {}, // No-op, will set cookies in response below
         },
       }
     );
@@ -33,8 +35,15 @@ export async function GET() {
       console.error('Profile fetch error:', profileError.message);
       return NextResponse.json({ profile: null, error: 'Profile not found.' }, { status: 404 });
     }
-    
-    return NextResponse.json({ profile });
+
+    // Set any cookies returned by Supabase in the response
+    const response = NextResponse.json({ profile });
+    // @ts-ignore
+    supabase.cookies?.getAll?.().forEach((cookie: any) => {
+      response.cookies.set(cookie.name, cookie.value, cookie.options);
+    });
+
+    return response;
 
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An unknown server error occurred';

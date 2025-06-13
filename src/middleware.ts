@@ -92,6 +92,7 @@ export const config = {
      */
     // '/((?!api|_next/static|_next/image|favicon.ico|login).*)',
     // More targeted matcher for protected areas:
+    '/',
     '/dashboard/:path*',
     '/admin/:path*',
     '/tools/:path*',

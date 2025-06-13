@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
   
   // If trying to access /login while already logged in, redirect to dashboard
   if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   // Return the response, which now has the updated auth cookies

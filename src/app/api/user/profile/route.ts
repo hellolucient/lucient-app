@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -38,8 +38,8 @@ export async function GET() {
 
     // Set any cookies returned by Supabase in the response
     const response = NextResponse.json({ profile });
-    // @ts-ignore
-    supabase.cookies?.getAll?.().forEach((cookie: any) => {
+    // @ts-expect-error The `cookies` object is not part of the public API, but we need it to set cookies in the response.
+    supabase.cookies?.getAll?.().forEach((cookie: { name: string; value: string; options: CookieOptions }) => {
       response.cookies.set(cookie.name, cookie.value, cookie.options);
     });
 

@@ -1,6 +1,38 @@
 import { NextResponse } from 'next/server';
 import { queryTopK } from '@/lib/vector/supabaseVectorClient';
 
+export async function GET() {
+  try {
+    console.log('Debug Chat - GET request received');
+    
+    // Test RAG query with a sample question
+    const testQuery = "Germany wellness economy";
+    const ragResults = await queryTopK(testQuery, 5, undefined, 0.5);
+    
+    return NextResponse.json({
+      success: true,
+      message: "Debug endpoint working",
+      testQuery: testQuery,
+      ragResults: {
+        count: ragResults.length,
+        results: ragResults.map(r => ({
+          id: r.id,
+          score: r.score,
+          fileName: r.file_name,
+          chunkText: r.chunk_text?.substring(0, 200) + '...',
+        }))
+      }
+    });
+    
+  } catch (error) {
+    console.error('Debug chat GET error:', error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -28,7 +60,7 @@ export async function POST(request: Request) {
     });
     
   } catch (error) {
-    console.error('Debug chat error:', error);
+    console.error('Debug chat POST error:', error);
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

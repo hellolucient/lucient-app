@@ -141,7 +141,12 @@ export default function HomePage() {
     if (!inputValue.trim()) return;
 
     const newUserMessage: ChatMessage = { role: 'user', content: inputValue.trim() };
-    setMessages(prevMessages => [...prevMessages, newUserMessage]);
+    console.log('Adding user message:', newUserMessage);
+    setMessages(prevMessages => {
+      const updatedMessages = [...prevMessages, newUserMessage];
+      console.log('Updated messages array:', updatedMessages);
+      return updatedMessages;
+    });
     setInputValue('');
     setIsLoading(true);
 
@@ -173,7 +178,12 @@ export default function HomePage() {
 
       const data = await response.json();
       const assistantMessage: ChatMessage = { role: 'assistant', content: data.reply };
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
+      console.log('Adding assistant message:', assistantMessage);
+      setMessages(prevMessages => {
+        const updatedMessages = [...prevMessages, assistantMessage];
+        console.log('Final messages array:', updatedMessages);
+        return updatedMessages;
+      });
 
     } catch (error: unknown) {
       console.error("Error sending message to", selectedProvider, ":", error);
@@ -344,15 +354,18 @@ export default function HomePage() {
                       <p className="text-muted-foreground">No messages yet. Select your options and ask something!</p>
                     </div>
                   )}
-                  {messages.map((msg, index) => (
-                    <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] transition-smooth ${
-                      msg.role === 'user' ? 'bg-gradient-primary text-primary-foreground ml-auto glow-primary' : 
-                      msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
-                      'bg-destructive text-destructive-foreground mr-auto font-semibold' 
-                    }`}>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  ))}
+                  {messages.map((msg, index) => {
+                    console.log(`Rendering message ${index}:`, msg);
+                    return (
+                      <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] transition-smooth ${
+                        msg.role === 'user' ? 'bg-gradient-primary text-primary-foreground ml-auto glow-primary' : 
+                        msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
+                        'bg-destructive text-destructive-foreground mr-auto font-semibold' 
+                      }`}>
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
 

@@ -136,15 +136,20 @@ export default function HomePage() {
     }
   }, [messages, userProfile?.user_tier]);
 
+  // Debug: Log whenever messages state changes
+  useEffect(() => {
+    console.log('🟢 CLIENT: Messages state changed:', messages);
+  }, [messages]);
+
   const handleSendMessage = async (event?: FormEvent) => {
     if (event) event.preventDefault();
     if (!inputValue.trim()) return;
 
     const newUserMessage: ChatMessage = { role: 'user', content: inputValue.trim() };
-    console.log('Adding user message:', newUserMessage);
+    console.log('🟢 CLIENT: Adding user message:', newUserMessage);
     setMessages(prevMessages => {
       const updatedMessages = [...prevMessages, newUserMessage];
-      console.log('Updated messages array:', updatedMessages);
+      console.log('🟢 CLIENT: Updated messages array:', updatedMessages);
       return updatedMessages;
     });
     setInputValue('');
@@ -178,10 +183,10 @@ export default function HomePage() {
 
       const data = await response.json();
       const assistantMessage: ChatMessage = { role: 'assistant', content: data.reply };
-      console.log('Adding assistant message:', assistantMessage);
+      console.log('🟢 CLIENT: Adding assistant message:', assistantMessage);
       setMessages(prevMessages => {
         const updatedMessages = [...prevMessages, assistantMessage];
-        console.log('Final messages array:', updatedMessages);
+        console.log('🟢 CLIENT: Final messages array:', updatedMessages);
         return updatedMessages;
       });
 
@@ -355,7 +360,7 @@ export default function HomePage() {
                     </div>
                   )}
                   {messages.map((msg, index) => {
-                    console.log(`Rendering message ${index}:`, msg);
+                    console.log(`🟢 CLIENT: Rendering message ${index}:`, msg);
                     return (
                       <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] transition-smooth ${
                         msg.role === 'user' ? 'bg-gradient-primary text-primary-foreground ml-auto glow-primary' : 

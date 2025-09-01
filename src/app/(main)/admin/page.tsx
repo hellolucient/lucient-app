@@ -60,19 +60,7 @@ export default function AdminPage() {
     fetchProfileAndInvites();
   }, []);
 
-  const fetchInvites = async () => {
-    try {
-      const invitesResponse = await fetch('/api/admin/invites');
-      if (!invitesResponse.ok) {
-        throw new Error('Failed to fetch invites.');
-      }
-      const invitesData = await invitesResponse.json();
-      setInvites(invitesData);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
-      setError(message);
-    }
-  };
+
 
   const handleApprove = async (inviteId: string, email: string, firstName: string, lastName: string) => {
     // Set processing state
@@ -115,7 +103,7 @@ export default function AdminPage() {
     }
   };
 
-  const getButtonContent = (inviteId: string, email: string, firstName: string, lastName: string) => {
+  const getButtonContent = (inviteId: string) => {
     const status = approvalStatuses[inviteId] || 'idle';
     
     switch (status) {
@@ -188,9 +176,9 @@ export default function AdminPage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold text-red-400 mb-4">Access Denied</h2>
               <p className="text-gray-300 mb-2">{error}</p>
-              <p className="text-sm text-gray-400">
-                Only users with the 'admin' tier can view this page.
-              </p>
+                             <p className="text-sm text-gray-400">
+                 Only users with the &apos;admin&apos; tier can view this page.
+               </p>
             </div>
           </div>
         </div>
@@ -205,7 +193,7 @@ export default function AdminPage() {
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-red-400 mb-4">Insufficient Permissions</h2>
-              <p className="text-gray-300">You don't have permission to view this page.</p>
+                             <p className="text-gray-300">You don&apos;t have permission to view this page.</p>
             </div>
           </div>
         </div>
@@ -311,7 +299,7 @@ export default function AdminPage() {
                       onClick={() => handleApprove(invite.id, invite.email, invite.first_name, invite.last_name)}
                       className="min-w-[120px] transition-all duration-200"
                     >
-                      {getButtonContent(invite.id, invite.email, invite.first_name, invite.last_name)}
+                                             {getButtonContent(invite.id)}
                     </Button>
                   </div>
                 ))}

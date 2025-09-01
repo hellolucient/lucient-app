@@ -56,9 +56,9 @@ const LoadingSpinner = () => (
 );
 
 const FreeTrialIndicator = ({ credits }: { credits: number }) => (
-  <div className="flex items-center justify-center text-xs text-muted-foreground bg-secondary p-2 rounded-lg border border-border/60">
-    <Info className="h-4 w-4 mr-2" />
-    You have {credits} free messages remaining.
+  <div className="flex items-center justify-center text-xs text-muted-foreground glass p-3 rounded-lg border border-border/30 transition-smooth">
+    <Info className="h-4 w-4 mr-2 text-accent" />
+    You have <span className="font-semibold text-primary mx-1">{credits}</span> free messages remaining.
   </div>
 );
 
@@ -231,10 +231,20 @@ export default function HomePage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-between p-6">
-      <div className="w-full max-w-xl mx-auto flex flex-col h-full">
+    <main className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-between p-6 relative overflow-hidden">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/5 -z-10"></div>
+      
+      {/* Floating orbs for visual interest */}
+      <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-primary rounded-full opacity-10 blur-xl animate-pulse"></div>
+      <div className="absolute bottom-20 right-10 w-24 h-24 bg-gradient-secondary rounded-full opacity-10 blur-xl animate-pulse delay-1000"></div>
+      <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-gradient-accent rounded-full opacity-10 blur-lg animate-pulse delay-500"></div>
+      
+      <div className="w-full max-w-xl mx-auto flex flex-col h-full relative z-10">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl lg:text-5xl font-bold">Welcome to <em className="lowercase font-bold italic">lucient</em></h1>
+          <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+            Welcome to <em className="lowercase font-bold italic">lucient</em>
+          </h1>
           <p className="mt-4 text-lg text-muted-foreground">
             Your intelligent assistant is ready.
           </p>
@@ -323,14 +333,19 @@ export default function HomePage() {
                   </div>
                 )}
 
-                <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border/50 rounded-lg bg-card/30 min-h-[300px]">
+                <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border/50 rounded-lg glass min-h-[300px] transition-smooth">
                   {messages.length === 0 && (
-                    <p className="text-muted-foreground text-center">No messages yet. Select your options and ask something!</p>
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
+                        <span className="text-2xl">✨</span>
+                      </div>
+                      <p className="text-muted-foreground">No messages yet. Select your options and ask something!</p>
+                    </div>
                   )}
                   {messages.map((msg, index) => (
-                    <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] ${ 
-                      msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 
-                      msg.role === 'assistant' ? 'bg-muted text-muted-foreground mr-auto' : 
+                    <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] transition-smooth ${
+                      msg.role === 'user' ? 'bg-gradient-primary text-primary-foreground ml-auto glow-primary' : 
+                      msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
                       'bg-destructive text-destructive-foreground mr-auto font-semibold' 
                     }`}>
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -351,7 +366,7 @@ export default function HomePage() {
                         }
                       }}
                       placeholder={isLoading ? `${selectedProvider === 'anthropic' ? 'Claude' : (openAIModels.find(m => m.value === selectedOpenAIModel)?.label || 'OpenAI')} is thinking...` : "Type your message..."}
-                      className="w-full p-3 pr-20 rounded-lg border border-border/70 focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none transition-shadow bg-background/80 backdrop-blur-sm"
+                      className="w-full p-3 pr-20 rounded-lg border border-border/70 focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none transition-smooth glass"
                       aria-label="Chat message input"
                       minRows={1}
                       maxRows={5}
@@ -359,7 +374,7 @@ export default function HomePage() {
                     />
                     <Button
                       type="submit"
-                      className="absolute top-1/2 right-2 transform -translate-y-1/2"
+                      className="absolute top-1/2 right-2 transform -translate-y-1/2 bg-gradient-primary hover:bg-gradient-primary/90 transition-smooth"
                       disabled={isLoading || !inputValue.trim()}
                       aria-label="Send message"
                     >
@@ -423,17 +438,18 @@ export default function HomePage() {
         )}
 
         {!sessionExists && (
-            <div className="mt-8 flex flex-col items-center gap-4 text-center">
-                <p className="text-muted-foreground">Please sign in to begin or request an invite.</p>
-                <div className="flex gap-4">
-                    <Button asChild>
-                        <Link href="/login">Sign In</Link>
-                    </Button>
-                    <Button asChild variant="secondary">
-                        <Link href="/request-invite">Request an Invite</Link>
-                    </Button>
+            <div className="mt-8 flex flex-col items-center gap-6 text-center">
+                <div className="glass p-6 rounded-xl border border-border/30">
+                    <p className="text-muted-foreground mb-4">Please sign in to begin or request an invite.</p>
+                    <div className="flex gap-4">
+                        <Button asChild className="bg-gradient-primary hover:bg-gradient-primary/90 transition-smooth">
+                            <Link href="/login">Sign In</Link>
+                        </Button>
+                        <Button asChild variant="secondary" className="bg-gradient-secondary hover:bg-gradient-secondary/90 transition-smooth">
+                            <Link href="/request-invite">Request an Invite</Link>
+                        </Button>
+                    </div>
                 </div>
-                {/* The "Built by" and "Powered by" lines have been completely removed. */}
             </div>
         )}
       </div>

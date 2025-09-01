@@ -43,10 +43,17 @@ function LoginClientContent() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <div className="w-full max-w-md p-8 space-y-6 bg-card shadow-xl rounded-lg">
+    <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/5 -z-10"></div>
+      
+      {/* Floating orbs */}
+      <div className="absolute top-20 left-20 w-40 h-40 bg-gradient-primary rounded-full opacity-10 blur-xl animate-pulse"></div>
+      <div className="absolute bottom-20 right-20 w-32 h-32 bg-gradient-secondary rounded-full opacity-10 blur-xl animate-pulse delay-1000"></div>
+      
+      <div className="w-full max-w-md p-8 space-y-6 glass shadow-xl rounded-xl border border-border/30 relative z-10">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Welcome Back
           </h1>
           <p className="text-muted-foreground">
@@ -81,7 +88,7 @@ function LoginClientContent() {
           {error && (
             <p className="text-sm text-destructive text-center">{error}</p>
           )}
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full bg-gradient-primary hover:bg-gradient-primary/90 transition-smooth" disabled={isLoading}>
             {isLoading ? "Signing In..." : "Sign In"}
           </Button>
         </form>

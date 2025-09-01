@@ -8,10 +8,28 @@ const ADMIN_EMAIL_to = 'app.access@hellolucient.com';
 const FROM_EMAIL = 'lucient <noreply@hellolucient.com>'; // Using your verified domain
 
 export async function POST(request: NextRequest) {
+  console.log('Request-invite API called');
+  
+  // Check for required environment variables
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.error('Missing NEXT_PUBLIC_SUPABASE_URL');
+    return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
+  }
+  
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('Missing SUPABASE_SERVICE_ROLE_KEY');
+    return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
+  }
+  
+  if (!process.env.RESEND_API_KEY) {
+    console.error('Missing RESEND_API_KEY');
+    return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
+  }
+  
   // Initialize Supabase client inside the handler
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
 
   try {
@@ -92,4 +110,9 @@ export async function POST(request: NextRequest) {
     console.error('Error processing invite request:', e);
     return NextResponse.json({ error: 'Invalid request format.' }, { status: 400 });
   }
-} 
+}
+
+// Add a global error handler for unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+}); 

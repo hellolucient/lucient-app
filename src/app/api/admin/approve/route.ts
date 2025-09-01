@@ -64,8 +64,10 @@ export async function POST(request: Request) {
       }
     );
 
-    const url = new URL(request.url);
-    const redirectTo = `${url.protocol}//${url.host}/set-password`;
+    // Use environment variable for production URL, fallback to request URL for development
+    const redirectTo = process.env.NODE_ENV === 'production' 
+      ? 'https://lucient-app.vercel.app/set-password'
+      : `${new URL(request.url).protocol}//${new URL(request.url).host}/set-password`;
 
     // 3. Invite the new user
     const { data, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(

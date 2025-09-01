@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
   if (chatMode === 'wellness') {
     try {
       console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
-      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, user.id);
+      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, user.id, 0.5);
       
       if (contextResults && contextResults.length > 0) {
         const processedContextChunks = contextResults

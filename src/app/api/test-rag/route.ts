@@ -7,19 +7,42 @@ export async function GET() {
     
     // Test query
     const testQuery = "New Zealand wellness economy";
-    const results = await queryTopK(testQuery, 5);
+    
+    // Test with different thresholds
+    const results1 = await queryTopK(testQuery, 5, undefined, 0.78); // Current threshold
+    const results2 = await queryTopK(testQuery, 5, undefined, 0.5);  // Lower threshold
+    const results3 = await queryTopK(testQuery, 5, undefined, 0.3);  // Much lower threshold
     
     return NextResponse.json({
       success: true,
       query: testQuery,
-      resultsCount: results.length,
-      results: results.map(r => ({
-        id: r.id,
-        score: r.score,
-        fileName: r.file_name,
-        chunkText: r.chunk_text?.substring(0, 100) + '...',
-        metadata: r.metadata
-      }))
+      resultsWithThreshold078: {
+        count: results1.length,
+        results: results1.map(r => ({
+          id: r.id,
+          score: r.score,
+          fileName: r.file_name,
+          chunkText: r.chunk_text?.substring(0, 100) + '...',
+        }))
+      },
+      resultsWithThreshold05: {
+        count: results2.length,
+        results: results2.map(r => ({
+          id: r.id,
+          score: r.score,
+          fileName: r.file_name,
+          chunkText: r.chunk_text?.substring(0, 100) + '...',
+        }))
+      },
+      resultsWithThreshold03: {
+        count: results3.length,
+        results: results3.map(r => ({
+          id: r.id,
+          score: r.score,
+          fileName: r.file_name,
+          chunkText: r.chunk_text?.substring(0, 100) + '...',
+        }))
+      }
     });
     
   } catch (error) {

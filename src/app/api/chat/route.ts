@@ -4,19 +4,11 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getUserApiKey } from '@/lib/user-keys';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { queryTopK } from '@/lib/vector/queryTopK';
+import { queryTopK } from '@/lib/vector/supabaseVectorClient';
 
-// Define a more specific type for the Qdrant payload
-interface QdrantChatPayload {
-  originalText?: string;
-  fileName?: string;
-  original_filename?: string; // Maintained for current logic
-  source?: string; // Maintained for current logic
-  page_number?: number;
-  // We are intentionally not including [key: string]: any; to be more specific
-}
 
-const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
+
+
 const TOP_K_RESULTS = 5;
 
 // Define a type for our user profile data
@@ -166,39 +158,37 @@ export async function POST(request: NextRequest) {
   if (chatMode === 'wellness') {
     try {
       console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
-      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, QDRANT_COLLECTION_NAME);
+      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, user.id);
       
       if (contextResults && contextResults.length > 0) {
         const processedContextChunks = contextResults
           .map(result => {
-            const payload = result.payload as QdrantChatPayload | null;
-
-            if (!payload || !payload.originalText) {
-              console.log(`Chat API (Claude): Skipping Qdrant result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing payload or originalText content.`);
+            if (!result.chunk_text) {
+              console.log(`Chat API (Claude): Skipping Supabase result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing chunk_text content.`);
               return null;
             }
 
             let contextChunk = "";
-            const sourceIdentifier = payload.fileName || payload.original_filename || payload.source || 'Unknown Source';
+            const sourceIdentifier = result.file_name || 'Unknown Source';
             contextChunk += `Source: ${sourceIdentifier}\n`;
 
-            if (payload.page_number !== undefined) {
-              contextChunk += `Page: ${payload.page_number}\n`;
+            if (result.metadata?.page_number !== undefined) {
+              contextChunk += `Page: ${result.metadata.page_number}\n`;
             }
-            contextChunk += `Content:\n${payload.originalText}`;
+            contextChunk += `Content:\n${result.chunk_text}`;
             return contextChunk;
           })
           .filter(chunk => chunk !== null);
 
         if (processedContextChunks.length > 0) {
           retrievedContext = processedContextChunks.join('\n\n---\n\n');
-          console.log(`Chat API (Claude): Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Qdrant results) to be used for RAG.`);
+          console.log(`Chat API (Claude): Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Supabase results) to be used for RAG.`);
         } else {
-          console.log(`Chat API (Claude): ${contextResults.length} raw results from Qdrant, but none contained usable text content after processing.`);
+          console.log(`Chat API (Claude): ${contextResults.length} raw results from Supabase, but none contained usable text content after processing.`);
           retrievedContext = '';
         }
       } else {
-        console.log('Chat API (Claude): No results returned from Qdrant (queryTopK) for the user message.');
+        console.log('Chat API (Claude): No results returned from Supabase (queryTopK) for the user message.');
       }
     } catch (ragError: unknown) {
       let errorMessage = 'Unknown error during RAG context retrieval';

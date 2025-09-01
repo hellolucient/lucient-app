@@ -2,29 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getDocumentChunks } from '@/lib/textProcessing/chunking';
-import { generateEmbedding } from '@/lib/ai/embeddingUtils';
-import { getQdrantClient } from '@/lib/vector/qdrantClient';
+import { upsertDocumentChunks } from '@/lib/vector/supabaseVectorClient';
 import mammoth from 'mammoth'; // For .doc, .docx
 import * as pdf from 'pdf-parse/lib/pdf-parse.js'; // For .pdf
-import { randomUUID } from 'crypto'; // Import randomUUID
 
 // Define a more specific type for the document payload sent to Qdrant
-interface DocumentPointPayload {
-  userId: string;
-  fileName: string;
-  originalText: string;
-  metadata: Record<string, unknown>; // langchain Document.metadata is Record<string, unknown>
-  [key: string]: unknown; // Add index signature to make it compatible with Record<string, unknown>
-}
 
-// Define PointStruct locally if import is problematic
-interface PointStruct {
-  id: string | number;
-  vector: number[];
-  payload?: DocumentPointPayload; // Use the more specific type
-}
-
-const QDRANT_COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'lucient_documents';
 
 const ALLOWED_FILE_TYPES = [
   'text/plain',
@@ -132,40 +115,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'File content is empty after chunking or could not be chunked.' }, { status: 400 });
     }
 
-    console.log('[API/DOCS_UPSERT] Starting embedding generation...');
-    const embeddingPromises = chunks.map(chunk => generateEmbedding(chunk.pageContent));
-    const embeddings = await Promise.all(embeddingPromises);
-    console.log(`[API/DOCS_UPSERT] Generated ${embeddings.length} embeddings.`);
-
-    if (embeddings.length !== chunks.length) {
-        console.error('[API/DOCS_UPSERT] Mismatch between number of chunks and embeddings');
-        return NextResponse.json({ error: 'Failed to generate embeddings for all chunks' }, { status: 500 });
-    }
+    console.log('[API/DOCS_UPSERT] Starting document processing for Supabase...');
     
-    console.log('[API/DOCS_UPSERT] Initializing Qdrant client...');
-    const qdrantClient = getQdrantClient();
-
-    const points: PointStruct[] = chunks.map((chunk, index) => ({
-      id: randomUUID(), // Use randomUUID to generate a valid ID
-      vector: embeddings[index],
-      payload: {
-        userId: user.id,
-        fileName: file.name,
-        originalText: chunk.pageContent,
-        metadata: chunk.metadata,
-      },
+    // Convert chunks to the format expected by our Supabase client
+    const documentChunks = chunks.map(chunk => ({
+      text: chunk.pageContent,
+      metadata: chunk.metadata
     }));
 
-    console.log(`[API/DOCS_UPSERT] Upserting ${points.length} points to Qdrant collection: ${QDRANT_COLLECTION_NAME}`);
-    await qdrantClient.upsert(QDRANT_COLLECTION_NAME, { points: points });
-    console.log(`[API/DOCS_UPSERT] Successfully upserted ${points.length} points.`);
+    console.log(`[API/DOCS_UPSERT] Upserting ${documentChunks.length} chunks to Supabase for user: ${user.id}`);
+    await upsertDocumentChunks(documentChunks, user.id, file.name, fileContent);
+    console.log(`[API/DOCS_UPSERT] Successfully upserted ${documentChunks.length} chunks to Supabase.`);
 
     return NextResponse.json(
       {
         message: 'Document processed and embedded successfully.',
         fileName: file.name,
         chunks: chunks.length,
-        collection: QDRANT_COLLECTION_NAME,
+        database: 'Supabase',
       },
       { status: 200 }
     );
@@ -174,12 +141,10 @@ export async function POST(req: NextRequest) {
 
     let errorMessage = 'An unknown server error occurred.';
     let errorDetails: string | undefined = undefined;
-    let qdrantErrorData: unknown = null;
     let errorStatus = 500;
 
     if (typeof error === 'object' && error !== null) {
-      // Check for Qdrant ResponseError like structure or other common error patterns
-      // Note: @qdrant/js-client-rest can throw ResponseError which has status and response.data
+      // Check for common error patterns
       if ('status' in error && typeof (error as { status: unknown }).status === 'number') {
         errorStatus = (error as { status: number }).status;
       }
@@ -188,24 +153,7 @@ export async function POST(req: NextRequest) {
         errorMessage = (error as { message: string }).message;
       }
       
-      if ('data' in error && (error as { data: unknown }).data) {
-        qdrantErrorData = (error as { data: unknown }).data;
-        console.error('[API/DOCS_UPSERT] Qdrant error data:', JSON.stringify(qdrantErrorData, null, 2));
-        // Attempt to get more specific Qdrant error message
-        if (typeof qdrantErrorData === 'object' && qdrantErrorData !== null && 'status' in qdrantErrorData) {
-          // Cast qdrantErrorData to a type that might have a status property
-          const qdrantErrorRecord = qdrantErrorData as Record<string, unknown>; 
-          const qdStatus = qdrantErrorRecord.status; // qdStatus is now unknown
-          
-          // Check if qdStatus is an object and has an error property
-          if (typeof qdStatus === 'object' && qdStatus !== null && 'error' in qdStatus) {
-            const statusRecord = qdStatus as Record<string, unknown>; // Cast qdStatus to access its properties
-            if (typeof statusRecord.error === 'string') {
-              errorMessage = `Qdrant API Error: ${statusRecord.error}`;
-            }
-          }
-        }
-      } else if ('statusText' in error && typeof (error as { statusText: unknown }).statusText === 'string' && errorStatus !== 500) {
+      if ('statusText' in error && typeof (error as { statusText: unknown }).statusText === 'string' && errorStatus !== 500) {
          // If we got a status from error.status, and there's a statusText, use it for more detail
          errorMessage = `Error ${errorStatus}: ${(error as { statusText: string }).statusText}`;
       }
@@ -220,7 +168,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       error: 'Failed to process document due to a server error.',
       details: errorMessage,
-      qdrantError: qdrantErrorData,
       fullErrorStack: errorDetails
     }, { status: errorStatus });
   }

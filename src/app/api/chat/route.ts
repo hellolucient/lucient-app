@@ -138,13 +138,17 @@ export async function POST(request: NextRequest) {
   }
   // --- End Tier-based Access Control ---
 
-  // 2. Get the user's message from the request body
+  // 2. Get the user's message and conversation history from the request body
   let userMessage: string;
   let chatMode: 'wellness' | 'general' = 'wellness'; // Default to wellness
+  let conversationHistory: Array<{ role: string; content: string }> = [];
   try {
     userMessage = body.message;
     if (body.chatMode) {
       chatMode = body.chatMode;
+    }
+    if (body.conversationHistory) {
+      conversationHistory = body.conversationHistory;
     }
     if (!userMessage || typeof userMessage !== 'string') {
       return NextResponse.json({ error: 'Message is required and must be a string.' }, { status: 400 });
@@ -268,11 +272,24 @@ Please formulate your response based on the guidelines provided in your system i
         console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
       }
 
+      // Build messages array with conversation history
+      const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      
+      // Add conversation history
+      conversationHistory.forEach(msg => {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          messages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+        }
+      });
+      
+      // Add current user message
+      messages.push({ role: "user", content: userPromptContent });
+
       const claudeResponse = await anthropic.messages.create({
         model: modelToUse,
         max_tokens: 3072,
         system: systemPrompt,
-        messages: [{ role: "user", content: userPromptContent }],
+        messages: messages,
       });
 
       let responseText = '';
@@ -297,9 +314,24 @@ Please formulate your response based on the guidelines provided in your system i
         userPromptContent = userMessage;
       }
 
+      // Build messages array with conversation history for OpenAI
+      const openaiMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system', content: systemPrompt }
+      ];
+      
+      // Add conversation history
+      conversationHistory.forEach(msg => {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          openaiMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+        }
+      });
+      
+      // Add current user message
+      openaiMessages.push({ role: 'user', content: userPromptContent });
+
       const openAiResponse = await openai.chat.completions.create({
         model: modelToUse,
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPromptContent }],
+        messages: openaiMessages,
         max_tokens: 3072,
       });
 

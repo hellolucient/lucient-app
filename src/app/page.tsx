@@ -30,6 +30,7 @@ interface ChatRequestBody {
   model?: string; // Optional, as it's only for OpenAI
   chatMode?: 'wellness' | 'general';
   provider?: 'anthropic' | 'openai';
+  conversationHistory?: ChatMessage[]; // Optional conversation history
 }
 
 // Add UserProfile type
@@ -149,6 +150,7 @@ export default function HomePage() {
       message: newUserMessage.content,
       chatMode: chatMode,
       provider: selectedProvider, // Include the provider in the body
+      conversationHistory: messages.slice(-10), // Send last 10 messages for context
     };
 
     if (selectedProvider === 'openai') {

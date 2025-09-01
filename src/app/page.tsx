@@ -56,7 +56,7 @@ const LoadingSpinner = () => (
 );
 
 const FreeTrialIndicator = ({ credits }: { credits: number }) => (
-  <div className="flex items-center justify-center text-xs text-muted-foreground glass p-3 rounded-lg border border-border/30 transition-smooth">
+  <div className="flex items-center justify-center text-xs text-muted-foreground bg-card p-3 rounded-lg border border-border transition-smooth">
     <Info className="h-4 w-4 mr-2 text-accent" />
     You have <span className="font-semibold text-primary mx-1">{credits}</span> free messages remaining.
   </div>
@@ -242,8 +242,8 @@ export default function HomePage() {
       
       <div className="w-full max-w-xl mx-auto flex flex-col h-full relative z-10">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-            Welcome to <em className="lowercase font-bold italic">lucient</em>
+          <h1 className="text-4xl lg:text-5xl font-bold">
+            Welcome to <em className="lowercase font-bold italic text-primary">lucient</em>
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
             Your intelligent assistant is ready.
@@ -333,7 +333,7 @@ export default function HomePage() {
                   </div>
                 )}
 
-                <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border/50 rounded-lg glass min-h-[300px] transition-smooth">
+                <div className="flex-grow overflow-y-auto mb-4 p-4 border border-border rounded-lg bg-card min-h-[300px] transition-smooth">
                   {messages.length === 0 && (
                     <div className="text-center py-8">
                       <div className="w-16 h-16 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
@@ -366,7 +366,7 @@ export default function HomePage() {
                         }
                       }}
                       placeholder={isLoading ? `${selectedProvider === 'anthropic' ? 'Claude' : (openAIModels.find(m => m.value === selectedOpenAIModel)?.label || 'OpenAI')} is thinking...` : "Type your message..."}
-                      className="w-full p-3 pr-20 rounded-lg border border-border/70 focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none transition-smooth glass"
+                      className="w-full p-3 pr-20 rounded-lg border border-border focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none transition-smooth bg-background"
                       aria-label="Chat message input"
                       minRows={1}
                       maxRows={5}
@@ -438,8 +438,8 @@ export default function HomePage() {
         )}
 
         {!sessionExists && (
-            <div className="mt-8 flex flex-col items-center gap-6 text-center">
-                <div className="glass p-6 rounded-xl border border-border/30">
+                            <div className="mt-8 flex flex-col items-center gap-6 text-center">
+                <div className="bg-card p-6 rounded-xl border border-border">
                     <p className="text-muted-foreground mb-4">Please sign in to begin or request an invite.</p>
                     <div className="flex gap-4">
                         <Button asChild className="bg-gradient-primary hover:bg-gradient-primary/90 transition-smooth">

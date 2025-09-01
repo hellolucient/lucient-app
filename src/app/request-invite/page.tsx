@@ -51,11 +51,11 @@ export default function RequestInvitePage() {
         <div className="absolute top-20 left-20 w-40 h-40 bg-gradient-primary rounded-full opacity-10 blur-xl animate-pulse"></div>
         <div className="absolute bottom-20 right-20 w-32 h-32 bg-gradient-secondary rounded-full opacity-10 blur-xl animate-pulse delay-1000"></div>
         
-        <div className="w-full max-w-md p-8 space-y-4 glass rounded-xl shadow-xl border border-border/30 relative z-10">
+        <div className="w-full max-w-md p-8 space-y-4 bg-card rounded-xl shadow-xl border border-border relative z-10">
           <div className="w-16 h-16 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
             <span className="text-2xl">✨</span>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Thank You!</h1>
+          <h1 className="text-3xl font-bold text-primary">Thank You!</h1>
           <p className="text-lg text-muted-foreground">
             Thank you for your interest in lucient. Demand is high. We will let you in as soon as we can. Keep an eye on your Inbox.
           </p>
@@ -76,9 +76,9 @@ export default function RequestInvitePage() {
       <div className="absolute top-20 left-20 w-40 h-40 bg-gradient-primary rounded-full opacity-10 blur-xl animate-pulse"></div>
       <div className="absolute bottom-20 right-20 w-32 h-32 bg-gradient-secondary rounded-full opacity-10 blur-xl animate-pulse delay-1000"></div>
       
-      <div className="w-full max-w-md p-8 space-y-8 glass rounded-xl shadow-xl border border-border/30 relative z-10">
+      <div className="w-full max-w-md p-8 space-y-8 bg-card rounded-xl shadow-xl border border-border relative z-10">
         <div className="text-center">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Request Access to lucient</h1>
+            <h1 className="text-3xl font-bold text-primary">Request Access to lucient</h1>
             <p className="mt-2 text-muted-foreground">Enter your details below to join the waitlist.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">

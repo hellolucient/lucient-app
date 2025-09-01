@@ -51,9 +51,9 @@ function LoginClientContent() {
       <div className="absolute top-20 left-20 w-40 h-40 bg-gradient-primary rounded-full opacity-10 blur-xl animate-pulse"></div>
       <div className="absolute bottom-20 right-20 w-32 h-32 bg-gradient-secondary rounded-full opacity-10 blur-xl animate-pulse delay-1000"></div>
       
-      <div className="w-full max-w-md p-8 space-y-6 glass shadow-xl rounded-xl border border-border/30 relative z-10">
+      <div className="w-full max-w-md p-8 space-y-6 bg-card shadow-xl rounded-xl border border-border relative z-10">
         <div className="text-center">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-primary">
             Welcome Back
           </h1>
           <p className="text-muted-foreground">

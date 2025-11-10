@@ -426,7 +426,7 @@ export default function HomePage() {
                       <div key={index} className="mb-3">
                         {isWellnessMode && msg.role === 'assistant' && (
                           <div className="text-xs text-muted-foreground mb-1 mr-auto font-medium">
-                            {isSecondAssistantMessage ? '📄 From Our Documents' : '🌐 General Knowledge'}
+                            {isSecondAssistantMessage ? '📄 Wellness Evidence' : '🌐 General Knowledge'}
                           </div>
                         )}
                         <div className={`p-3 rounded-lg max-w-[80%] transition-smooth ${

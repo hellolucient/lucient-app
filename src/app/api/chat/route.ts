@@ -180,6 +180,20 @@ export async function POST(request: NextRequest) {
         ];
         
         console.log(`Chat API: Searching all ${contextResults.length} chunks for specific quote patterns...`);
+        
+        // First, search ALL chunks for "2nd birthday" or "child's" to see if quote is split
+        console.log(`Chat API: Checking if quote is split across chunks...`);
+        contextResults.forEach((result, chunkIndex) => {
+          const fullText = result.chunk_text || '';
+          const has2ndBirthday = fullText.toLowerCase().includes('2nd birthday') || fullText.toLowerCase().includes('second birthday');
+          const hasChilds = fullText.toLowerCase().includes("child's");
+          if (has2ndBirthday || hasChilds) {
+            const context = fullText.substring(Math.max(0, fullText.toLowerCase().indexOf(has2ndBirthday ? '2nd birthday' : "child's") - 100), 
+                                                Math.min(fullText.length, fullText.toLowerCase().indexOf(has2ndBirthday ? '2nd birthday' : "child's") + 200));
+            console.log(`  >>> Chunk [${chunkIndex + 1}] contains "${has2ndBirthday ? '2nd birthday' : "child's"}": "${context}..."`);
+          }
+        });
+        
         contextResults.forEach((result, chunkIndex) => {
           const fullText = result.chunk_text || '';
           searchPatterns.forEach(pattern => {

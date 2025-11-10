@@ -191,6 +191,17 @@ export async function POST(request: NextRequest) {
               // If we found "between pregnancy and", log the FULL text of this chunk to see the complete quote
               if (pattern === 'between pregnancy and') {
                 console.log(`  >>> Chunk [${chunkIndex + 1}] FULL TEXT (${fullText.length} chars): "${fullText}"`);
+                // Also search for "2nd birthday" or "second birthday" in this chunk
+                const has2ndBirthday = fullText.toLowerCase().includes('2nd birthday') || fullText.toLowerCase().includes('second birthday');
+                console.log(`  >>> Chunk [${chunkIndex + 1}] contains "2nd birthday" or "second birthday": ${has2ndBirthday}`);
+                if (!has2ndBirthday) {
+                  // The quote might be split - check if "child's" appears
+                  const hasChilds = fullText.toLowerCase().includes("child's");
+                  console.log(`  >>> Chunk [${chunkIndex + 1}] contains "child's": ${hasChilds}`);
+                  // Check what comes after "between pregnancy and a"
+                  const afterPregnancy = fullText.toLowerCase().substring(fullText.toLowerCase().indexOf('between pregnancy and a') + 'between pregnancy and a'.length, fullText.toLowerCase().indexOf('between pregnancy and a') + 'between pregnancy and a'.length + 100);
+                  console.log(`  >>> Chunk [${chunkIndex + 1}] text after "between pregnancy and a": "${afterPregnancy}"`);
+                }
               }
             }
           });

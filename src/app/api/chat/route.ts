@@ -163,8 +163,8 @@ export async function POST(request: NextRequest) {
     try {
       console.log(`Chat API: Retrieving RAG context for query: "${query.substring(0, 100)}..."`);
       // Query all documents (shared knowledge base) - pass undefined instead of user.id
-      // Using very low threshold (0.3) to ensure we get results - cosine similarity can be lower for semantic matches
-      const contextResults = await queryTopK(query, TOP_K_RESULTS, undefined, 0.3);
+      // Using very low threshold (0.25) to ensure we get more results - cosine similarity can be lower for semantic matches
+      const contextResults = await queryTopK(query, TOP_K_RESULTS, undefined, 0.25);
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {
@@ -175,7 +175,26 @@ export async function POST(request: NextRequest) {
           const fileName = result.file_name || 'Unknown';
           const score = result.score?.toFixed(4) || 'N/A';
           const preview = result.chunk_text?.substring(0, 150) || 'No text';
-          console.log(`  [${index + 1}] ${fileName} - ${pageNum} (score: ${score}): "${preview}..."`);
+          const fullText = result.chunk_text || '';
+          
+          // Check if this chunk contains key phrases
+          const hasPregnancy2ndBirthday = fullText.toLowerCase().includes('pregnancy') && 
+                                         (fullText.toLowerCase().includes('2nd birthday') || 
+                                          fullText.toLowerCase().includes('second birthday'));
+          const hasPage13 = fullText.includes('13') && fullText.includes('EARLY LIFE PREVENTION');
+          
+          let flags = '';
+          if (hasPregnancy2ndBirthday) flags += ' [HAS PREGNANCY-2ND BIRTHDAY QUOTE]';
+          if (hasPage13) flags += ' [HAS PAGE 13 HEADER]';
+          
+          console.log(`  [${index + 1}] ${fileName} - ${pageNum} (score: ${score})${flags}: "${preview}..."`);
+          
+          // If this chunk has the specific quote, log more of it
+          if (hasPregnancy2ndBirthday) {
+            const quoteIndex = fullText.toLowerCase().indexOf('pregnancy');
+            const quoteContext = fullText.substring(Math.max(0, quoteIndex - 50), Math.min(fullText.length, quoteIndex + 200));
+            console.log(`      >>> Full quote context: "${quoteContext}..."`);
+          }
         });
 
         const processedContextChunks = contextResults

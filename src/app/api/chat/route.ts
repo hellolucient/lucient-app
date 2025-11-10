@@ -168,6 +168,29 @@ export async function POST(request: NextRequest) {
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {
+        // Search ALL chunks for the specific quote before logging
+        const searchPatterns = [
+          'between pregnancy and',
+          'pregnancy and a child',
+          'pregnancy and child',
+          '2nd birthday',
+          'second birthday',
+          '1000 days',
+          '1,000 days'
+        ];
+        
+        console.log(`Chat API: Searching all ${contextResults.length} chunks for specific quote patterns...`);
+        contextResults.forEach((result, chunkIndex) => {
+          const fullText = result.chunk_text || '';
+          searchPatterns.forEach(pattern => {
+            const patternIndex = fullText.toLowerCase().indexOf(pattern.toLowerCase());
+            if (patternIndex !== -1) {
+              const context = fullText.substring(Math.max(0, patternIndex - 100), Math.min(fullText.length, patternIndex + 200));
+              console.log(`  >>> Chunk [${chunkIndex + 1}] contains "${pattern}" at position ${patternIndex}: "${context}..."`);
+            }
+          });
+        });
+        
         // Log detailed information about retrieved chunks
         console.log(`Chat API: Retrieved ${contextResults.length} chunks. Details:`);
         contextResults.forEach((result, index) => {

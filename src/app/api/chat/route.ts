@@ -163,7 +163,9 @@ export async function POST(request: NextRequest) {
     try {
       console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
       // Query all documents (shared knowledge base) - pass undefined instead of user.id
+      // Using lower threshold (0.5) to get more results, but we can adjust if needed
       const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, undefined, 0.5);
+      console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {
         const processedContextChunks = contextResults
@@ -188,6 +190,7 @@ export async function POST(request: NextRequest) {
         if (processedContextChunks.length > 0) {
           retrievedContext = processedContextChunks.join('\n\n---\n\n');
           console.log(`Chat API (Claude): Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Supabase results) to be used for RAG.`);
+          console.log(`Chat API (Claude): First 200 chars of retrieved context: ${retrievedContext.substring(0, 200)}...`);
         } else {
           console.log(`Chat API (Claude): ${contextResults.length} raw results from Supabase, but none contained usable text content after processing.`);
           retrievedContext = '';
@@ -238,10 +241,11 @@ Question: "What is the most critical time for cognitive development?"
 Correct Response Format:
 "According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning...
 
-**From Our Research Documents:**
+### From Our Research Documents:
 According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from pregnancy to a child's 2nd birthday are the most critical time for cognitive, physical and social development..."
 
 **YOU MUST FOLLOW THIS FORMAT FOR EVERY RESPONSE.**
+**IF DOCUMENT CONTEXT IS PROVIDED, YOU MUST INCLUDE A "From Our Research Documents" SECTION.**
 
 **Response Structure (When Document Context is Available):**
 
@@ -256,9 +260,10 @@ According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from preg
 *   If you don't know the specific URL, still cite the source but note it: "According to the American Academy of Pediatrics (see aap.org for more information)..."
 *   Format citations clearly so users can verify and click through to sources.
 
-**Part B: Document-Specific Findings**
-*   After presenting general knowledge, present specific information from the internal documents provided to you.
-*   Use clear section headers like "According to Our Research Documents:" or "From Our Internal Documents:"
+**Part B: Document-Specific Findings - MANDATORY WHEN CONTEXT IS PROVIDED**
+*   **CRITICAL:** If document context is provided in the <document_context> section, you MUST include a "Part B" section with document findings. This is not optional.
+*   After presenting general knowledge, you MUST present specific information from the internal documents provided to you.
+*   Use clear section headers like "### According to Our Research Documents:" or "### From Our Internal Documents:"
 *   **MANDATORY CITATION:** You MUST cite the specific document source for EVERY piece of information from the documents.
 *   Citation format: "According to '[Document Name]' (Page X, if available)..." or "The '[Document Name]' document states..."
 *   The context provided includes "Source: [document_name]" - use this exact document name in your citation.
@@ -266,6 +271,7 @@ According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from preg
 *   **Note:** Document citations will be formatted as clickable links in the UI, so use the exact document name as provided.
 *   Present ALL relevant information from the documents that relates to the query.
 *   If the document information contradicts or differs from general knowledge, clearly state this difference.
+*   **If you see document context but don't include it in your response, your answer is incomplete and incorrect.**
 
 **Response Structure (When NO Document Context is Available):**
 *   Clearly state: "Our internal documents do not contain specific information about this topic."
@@ -298,10 +304,12 @@ User's Question:
 ${userMessage}
 </user_question>
 
-**REMINDER: You MUST include citations for ALL information in your response.**
-- For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
-- For document information: Cite the document name (e.g., "According to '[Document Name]' (Page X)...")
-- Every factual statement requires a citation. No exceptions.
+**CRITICAL REMINDERS:**
+1. You MUST include citations for ALL information in your response.
+2. For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
+3. For document information: Cite the document name (e.g., "According to '[Document Name]' (Page X)...")
+4. **IF DOCUMENT CONTEXT IS PROVIDED ABOVE (not "No specific context"), you MUST include a "Part B" section with document findings.**
+5. Every factual statement requires a citation. No exceptions.
 
 Please formulate your response based on the guidelines provided in your system instructions.`;
         console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);

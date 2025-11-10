@@ -17,52 +17,16 @@ import { Label } from "@/components/ui/label";
 import TextareaAutosize from 'react-textarea-autosize';
 import Image from 'next/image';
 import { ChevronDown, Check, Info } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
-// Utility function to convert URLs in text to clickable links
-const linkifyText = (text: string): React.ReactNode => {
-  // Regex to match URLs (http, https, www) - handles URLs in parentheses
-  const urlRegex = /(https?:\/\/[^\s\)]+|www\.[^\s\)]+)/g;
-  const matches = Array.from(text.matchAll(urlRegex));
-  
-  if (matches.length === 0) {
-    return <span>{text}</span>;
-  }
-  
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  
-  matches.forEach((match, index) => {
-    const matchIndex = match.index!;
-    const matchText = match[0];
-    
-    // Add text before the URL
-    if (matchIndex > lastIndex) {
-      parts.push(<span key={`text-${index}`}>{text.slice(lastIndex, matchIndex)}</span>);
-    }
-    
-    // Add the clickable URL
-    const url = matchText.startsWith('http') ? matchText : `https://${matchText}`;
-    parts.push(
-      <a
-        key={`link-${index}`}
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-primary underline hover:text-primary/80 break-all"
-      >
-        {matchText}
-      </a>
-    );
-    
-    lastIndex = matchIndex + matchText.length;
+// Preprocess text to convert URLs in parentheses to markdown links
+const preprocessMarkdown = (text: string): string => {
+  // Convert URLs in parentheses to markdown links
+  // Matches: (https://example.com) or (www.example.com)
+  return text.replace(/\(((https?:\/\/[^\s\)]+|www\.[^\s\)]+))\)/g, (match, url) => {
+    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+    return `([${url}](${fullUrl}))`;
   });
-  
-  // Add remaining text after last URL
-  if (lastIndex < text.length) {
-    parts.push(<span key="text-end">{text.slice(lastIndex)}</span>);
-  }
-  
-  return <>{parts}</>;
 };
 
 // Define a type for individual messages in the chat
@@ -416,8 +380,35 @@ export default function HomePage() {
                         msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
                         'bg-destructive text-destructive-foreground mr-auto font-semibold' 
                       }`}>
-                        <div className="text-sm whitespace-pre-wrap">
-                          {linkifyText(msg.content)}
+                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                          <ReactMarkdown
+                            components={{
+                              // Make links open in new tab and style them
+                              a: ({ node, ...props }) => (
+                                <a
+                                  {...props}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary underline hover:text-primary/80 break-all"
+                                />
+                              ),
+                              // Style headings
+                              h1: ({ node, ...props }) => <h1 {...props} className="text-lg font-bold mt-4 mb-2" />,
+                              h2: ({ node, ...props }) => <h2 {...props} className="text-base font-bold mt-3 mb-2" />,
+                              h3: ({ node, ...props }) => <h3 {...props} className="text-sm font-semibold mt-2 mb-1" />,
+                              // Style lists
+                              ul: ({ node, ...props }) => <ul {...props} className="list-disc list-inside my-2 space-y-1" />,
+                              ol: ({ node, ...props }) => <ol {...props} className="list-decimal list-inside my-2 space-y-1" />,
+                              li: ({ node, ...props }) => <li {...props} className="ml-2" />,
+                              // Style paragraphs
+                              p: ({ node, ...props }) => <p {...props} className="mb-2" />,
+                              // Style bold and italic
+                              strong: ({ node, ...props }) => <strong {...props} className="font-semibold" />,
+                              em: ({ node, ...props }) => <em {...props} className="italic" />,
+                            }}
+                          >
+                            {preprocessMarkdown(msg.content)}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     );

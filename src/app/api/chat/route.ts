@@ -230,8 +230,18 @@ export async function POST(request: NextRequest) {
       } else { // 'wellness' mode
         systemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries with FULL CITATION of all sources.
 
-**CRITICAL: ALL ANSWERS MUST INCLUDE CITATIONS**
-Every piece of information you provide must be attributed to a source. This is mandatory, not optional.
+**CRITICAL RULE - NO EXCEPTIONS: ALL ANSWERS MUST INCLUDE CITATIONS**
+Every single factual claim, statement, or piece of information you provide MUST be attributed to a source. This is not optional - it is mandatory. If you fail to include citations, your response is incomplete and incorrect.
+
+**EXAMPLE OF CORRECT FORMAT:**
+Question: "What is the most critical time for cognitive development?"
+Correct Response Format:
+"According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning...
+
+**From Our Research Documents:**
+According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from pregnancy to a child's 2nd birthday are the most critical time for cognitive, physical and social development..."
+
+**YOU MUST FOLLOW THIS FORMAT FOR EVERY RESPONSE.**
 
 **Response Structure (When Document Context is Available):**
 
@@ -288,6 +298,11 @@ User's Question:
 ${userMessage}
 </user_question>
 
+**REMINDER: You MUST include citations for ALL information in your response.**
+- For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
+- For document information: Cite the document name (e.g., "According to '[Document Name]' (Page X)...")
+- Every factual statement requires a citation. No exceptions.
+
 Please formulate your response based on the guidelines provided in your system instructions.`;
         console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
       }
@@ -324,11 +339,29 @@ Please formulate your response based on the guidelines provided in your system i
     } else if (provider === 'openai') {
       const openai = new OpenAI({ apiKey });
 
-      // NOTE: The RAG context and complex prompting is not yet implemented for OpenAI.
-      // This is a simplified path for now.
+      // OpenAI path with citation requirements
       if (chatMode === 'wellness') {
-        systemPrompt = `You are a wellness assistant. The user has provided the following context from internal documents: \n\n${retrievedContext}\n\n Answer the user's question based on this context.`;
-        userPromptContent = userMessage;
+        systemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries with FULL CITATION of all sources.
+
+**CRITICAL RULE - NO EXCEPTIONS: ALL ANSWERS MUST INCLUDE CITATIONS**
+Every single factual claim, statement, or piece of information you provide MUST be attributed to a source. This is not optional - it is mandatory.
+
+**Response Structure:**
+1. **General Knowledge Foundation:** Begin with widely accepted understanding, citing sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)").
+2. **Document-Specific Findings:** If document context is provided, present it with citations (e.g., "According to '[Document Name]' (Page X)...").
+
+**MANDATORY:** Every factual statement requires a citation. No exceptions.`;
+        userPromptContent = `Internal Document Context:
+<document_context>
+${retrievedContext || "No specific context was retrieved from internal documents for this query."}
+</document_context>
+
+User's Question: ${userMessage}
+
+**REMINDER: You MUST include citations for ALL information in your response.**
+- For general knowledge: Cite sources with URLs
+- For document information: Cite the document name
+- Every factual statement requires a citation. No exceptions.`;
       } else {
         systemPrompt = "You are lucient, a helpful AI assistant.";
         userPromptContent = userMessage;

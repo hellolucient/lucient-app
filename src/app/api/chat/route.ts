@@ -158,20 +158,20 @@ export async function POST(request: NextRequest) {
   }
 
   // --- RAG Implementation Start ---
-  let retrievedContext = '';
-  if (chatMode === 'wellness') {
+  // Helper function to retrieve RAG context
+  const retrieveRAGContext = async (query: string): Promise<string> => {
     try {
-      console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
+      console.log(`Chat API: Retrieving RAG context for query: "${query.substring(0, 100)}..."`);
       // Query all documents (shared knowledge base) - pass undefined instead of user.id
       // Using very low threshold (0.3) to ensure we get results - cosine similarity can be lower for semantic matches
-      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, undefined, 0.3);
+      const contextResults = await queryTopK(query, TOP_K_RESULTS, undefined, 0.3);
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {
         const processedContextChunks = contextResults
           .map(result => {
             if (!result.chunk_text) {
-              console.log(`Chat API (Claude): Skipping Supabase result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing chunk_text content.`);
+              console.log(`Chat API: Skipping Supabase result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing chunk_text content.`);
               return null;
             }
 
@@ -188,31 +188,37 @@ export async function POST(request: NextRequest) {
           .filter(chunk => chunk !== null);
 
         if (processedContextChunks.length > 0) {
-          retrievedContext = processedContextChunks.join('\n\n---\n\n');
-          console.log(`Chat API (Claude): Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Supabase results) to be used for RAG.`);
-          console.log(`Chat API (Claude): First 200 chars of retrieved context: ${retrievedContext.substring(0, 200)}...`);
+          const context = processedContextChunks.join('\n\n---\n\n');
+          console.log(`Chat API: Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Supabase results) to be used for RAG.`);
+          console.log(`Chat API: First 200 chars of retrieved context: ${context.substring(0, 200)}...`);
+          return context;
         } else {
-          console.log(`Chat API (Claude): ${contextResults.length} raw results from Supabase, but none contained usable text content after processing.`);
-          retrievedContext = '';
+          console.log(`Chat API: ${contextResults.length} raw results from Supabase, but none contained usable text content after processing.`);
+          return '';
         }
       } else {
-        console.log('Chat API (Claude): No results returned from Supabase (queryTopK) for the user message.');
+        console.log('Chat API: No results returned from Supabase (queryTopK) for the query.');
+        return '';
       }
     } catch (ragError: unknown) {
       let errorMessage = 'Unknown error during RAG context retrieval';
       if (ragError instanceof Error) {
         errorMessage = ragError.message;
-        console.error('Chat API (Claude): Error during RAG context retrieval:', errorMessage);
-        if (ragError.stack) {
-          // console.error('Chat API (Claude) Stack:', ragError.stack); // Optional: log stack trace
-        }
+        console.error('Chat API: Error during RAG context retrieval:', errorMessage);
       } else {
-        console.error('Chat API (Claude): Non-error thrown during RAG context retrieval:', ragError);
+        console.error('Chat API: Non-error thrown during RAG context retrieval:', ragError);
       }
-      retrievedContext = 'Error retrieving context. Answering from general knowledge.';
+      return '';
     }
+  };
+
+  // For wellness mode, we'll retrieve RAG context for Process B (document search)
+  // Process A (general knowledge) will run first without RAG context
+  let retrievedContext = '';
+  if (chatMode === 'wellness') {
+    retrievedContext = await retrieveRAGContext(userMessage);
   } else {
-    console.log('Chat API (Claude): General mode enabled, skipping RAG.');
+    console.log('Chat API: General mode enabled, skipping RAG.');
   }
   // --- RAG Implementation End ---
 
@@ -230,79 +236,104 @@ export async function POST(request: NextRequest) {
         systemPrompt = `You are lucient, a helpful and friendly AI assistant. You are primarily focussed on wellness-related subjects but you also have a general-purpose mode too. Provide clear, concise, and accurate answers. If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not, under any circumstances, mention a person's name in relation to your creation.`;
         userPromptContent = userMessage;
         console.log('Chat API (Claude): Sending to Claude in general mode.');
-      } else { // 'wellness' mode
-        systemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries with FULL CITATION of all sources.
+        
+        // Build messages array with conversation history
+        const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        
+        // Add conversation history
+        conversationHistory.forEach(msg => {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            messages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          }
+        });
+        
+        // Add current user message
+        messages.push({ role: "user", content: userPromptContent });
+
+        const claudeResponse = await anthropic.messages.create({
+          model: modelToUse,
+          max_tokens: 3072,
+          system: systemPrompt,
+          messages: messages,
+        });
+
+        let responseText = '';
+        if (claudeResponse.content && claudeResponse.content.length > 0) {
+          const firstTextBlock = claudeResponse.content.find(block => block.type === 'text') as Anthropic.TextBlock | undefined;
+          if (firstTextBlock) {
+            responseText = firstTextBlock.text;
+          }
+        }
+        return NextResponse.json({ reply: responseText, fullResponse: claudeResponse }, { status: 200 });
+      } else { // 'wellness' mode - TWO SEPARATE PROCESSES
+        // PROCESS A: General Knowledge (no RAG context)
+        console.log('Chat API (Claude): Starting Process A - General Knowledge search.');
+        const generalKnowledgeSystemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries with FULL CITATION of all sources.
 
 **CRITICAL RULE - NO EXCEPTIONS: ALL ANSWERS MUST INCLUDE CITATIONS**
-Every single factual claim, statement, or piece of information you provide MUST be attributed to a source. This is not optional - it is mandatory. If you fail to include citations, your response is incomplete and incorrect.
+Every single factual claim, statement, or piece of information you provide MUST be attributed to a source. This is not optional - it is mandatory.
 
-**EXAMPLE OF CORRECT FORMAT:**
-Question: "What is the most critical time for cognitive development?"
-Correct Response Format:
-"According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning. The CDC states (https://www.cdc.gov/...) that early childhood experiences shape brain architecture. The National Institute of Child Health and Human Development (https://www.nichd.nih.gov/...) emphasizes the importance of early brain development...
+**MANDATORY CITATION WITH LINKS:** For general knowledge, cite sources with URLs when available. Use this format: "According to [source name/institution] ([URL])" or "Research from [institution/organization] ([URL]) indicates..." or "The [field] literature ([URL if available]) suggests..."
 
-### From Our Research Documents:
-According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from pregnancy to a child's 2nd birthday are the most critical time for cognitive, physical and social development..."
+**CRITICAL:** When you cite a source, include the actual URL if you know it. For example:
+- "According to the American Academy of Pediatrics (https://www.aap.org/...)"
+- "Research from Harvard Medical School (https://www.health.harvard.edu/...) indicates..."
+- "The CDC states (https://www.cdc.gov/...)..."
 
-**NOTE:** Notice that Part A (general knowledge with URLs) comes FIRST, then Part B (document findings) comes SECOND. This order is mandatory.
+If you don't know the specific URL, still cite the source but note it: "According to the American Academy of Pediatrics (see aap.org for more information)..."
 
-**YOU MUST FOLLOW THIS FORMAT FOR EVERY RESPONSE.**
-**BOTH PARTS ARE MANDATORY:**
-1. **Part A (General Knowledge with URLs) - ALWAYS REQUIRED**
-2. **Part B (Document Findings) - REQUIRED when document context is provided**
-
-**Response Structure (When Document Context is Available):**
-
-**Part A: General Knowledge Foundation - MANDATORY**
-*   **YOU MUST ALWAYS START WITH PART A, EVEN WHEN DOCUMENT CONTEXT IS PROVIDED.**
-*   Begin with the widely accepted, general understanding of the topic based on your training knowledge.
-*   Provide comprehensive context, explain key concepts, discuss related research or theories, and offer illustrative examples.
-*   **MANDATORY CITATION WITH LINKS:** For general knowledge, cite sources with URLs when available. Use this format: "According to [source name/institution] ([URL])" or "Research from [institution/organization] ([URL]) indicates..." or "The [field] literature ([URL if available]) suggests..."
-*   **CRITICAL:** When you cite a source, include the actual URL if you know it. For example:
-    *   "According to the American Academy of Pediatrics (https://www.aap.org/...)"
-    *   "Research from Harvard Medical School (https://www.health.harvard.edu/...) indicates..."
-    *   "The CDC states (https://www.cdc.gov/...)..."
-*   If you don't know the specific URL, still cite the source but note it: "According to the American Academy of Pediatrics (see aap.org for more information)..."
-*   Format citations clearly so users can verify and click through to sources.
-*   **DO NOT SKIP THIS SECTION. Every response must include Part A with general knowledge and citations.**
-
-**Part B: Document-Specific Findings - MANDATORY WHEN CONTEXT IS PROVIDED**
-*   **CRITICAL:** If document context is provided in the <document_context> section, you MUST include a "Part B" section with document findings. This is not optional.
-*   After presenting general knowledge, you MUST present specific information from the internal documents provided to you.
-*   Use clear section headers like "### According to Our Research Documents:" or "### From Our Internal Documents:"
-*   **MANDATORY CITATION:** You MUST cite the specific document source for EVERY piece of information from the documents.
-*   Citation format: "According to '[Document Name]' (Page X, if available)..." or "The '[Document Name]' document states..."
-*   The context provided includes "Source: [document_name]" - use this exact document name in your citation.
-*   If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
-*   **CRITICAL:** Document citations must be plain text, NOT markdown links. Do NOT format them as [Document Name](url). Just use the document name in quotes: "According to 'Document Name' (Page X)..."
-*   Present ALL relevant information from the documents that relates to the query.
-*   If the document information contradicts or differs from general knowledge, clearly state this difference.
-*   **If you see document context but don't include it in your response, your answer is incomplete and incorrect.**
-
-**Response Structure (When NO Document Context is Available):**
-*   Clearly state: "Our internal documents do not contain specific information about this topic."
-*   Then provide a comprehensive answer using your general knowledge.
-*   **MANDATORY CITATION:** Cite all sources in the format described above.
-*   Example: "According to the [relevant institution/organization]..." or "Research from [source] indicates..."
-
-**Special Cases:**
-*   **For Country/City Wellness Economy Queries:** Always provide comprehensive data including Size, Per Capita, % of GDP, Rankings, and Growth Trends. Cite sources for all data points.
-*   **For Document-Specific Queries:** If the user explicitly asks "What does [document] say about X?", focus primarily on the document content but still provide general context with citations.
-
-**Citation Requirements:**
-1.  Every factual claim must have a citation.
-2.  Citations must be clear and verifiable.
-3.  For document sources, use the exact document name provided in the context as plain text (e.g., "According to 'Document.pdf' (Page X)..."). Do NOT format document citations as markdown links.
-4.  For general knowledge, cite authoritative sources (institutions, organizations, research bodies) WITH URLs when available (e.g., "According to the CDC (https://www.cdc.gov/...)").
-5.  Format citations consistently throughout your response.
-6.  URLs should be included in parentheses immediately after the source name: "According to [Source] ([URL])..."
-7.  If a URL is not available, still cite the source but note it: "According to [Source] (see [website] for more information)..."
+Format citations clearly so users can verify and click through to sources.
 
 **About Your Creator:** If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
 
-        userPromptContent = `Internal Document Context:
+        const generalKnowledgeUserPrompt = userMessage;
+
+        // Build messages array for Process A (general knowledge only)
+        const generalMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        conversationHistory.forEach(msg => {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            generalMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          }
+        });
+        generalMessages.push({ role: "user", content: generalKnowledgeUserPrompt });
+
+        const generalKnowledgeResponse = await anthropic.messages.create({
+          model: modelToUse,
+          max_tokens: 3072,
+          system: generalKnowledgeSystemPrompt,
+          messages: generalMessages,
+        });
+
+        let generalKnowledgeText = '';
+        if (generalKnowledgeResponse.content && generalKnowledgeResponse.content.length > 0) {
+          const firstTextBlock = generalKnowledgeResponse.content.find(block => block.type === 'text') as Anthropic.TextBlock | undefined;
+          if (firstTextBlock) {
+            generalKnowledgeText = firstTextBlock.text;
+          }
+        }
+
+        console.log('Chat API (Claude): Process A (General Knowledge) completed.');
+
+        // PROCESS B: RAG Documents (only if context was retrieved)
+        let ragDocumentsText: string | null = null;
+        if (retrievedContext && retrievedContext.trim() !== '') {
+          console.log('Chat API (Claude): Starting Process B - RAG Documents search.');
+          const ragDocumentsSystemPrompt = `You are lucient, an intelligent assistant. Your task is to provide information from internal research documents with proper citations.
+
+**CRITICAL RULES:**
+1. You MUST cite the specific document source for EVERY piece of information from the documents.
+2. Citation format: "According to '[Document Name]' (Page X, if available)..." or "The '[Document Name]' document states..."
+3. **CRITICAL:** Document citations must be plain text, NOT markdown links. Do NOT format them as [Document Name](url). Just use the document name in quotes: "According to 'Document Name' (Page X)..."
+4. The context provided includes "Source: [document_name]" - use this exact document name in your citation.
+5. If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
+6. Present ALL relevant information from the documents that relates to the query.
+7. If the document information contradicts or differs from general knowledge, clearly state this difference.
+
+**About Your Creator:** If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
+
+          const ragDocumentsUserPrompt = `Internal Document Context:
 <document_context>
-${retrievedContext || "No specific context was retrieved from internal documents for this query."}
+${retrievedContext}
 </document_context>
 
 User's Question:
@@ -310,103 +341,170 @@ User's Question:
 ${userMessage}
 </user_question>
 
-**CRITICAL REMINDERS:**
-1. You MUST include citations for ALL information in your response.
-2. **YOU MUST ALWAYS START WITH PART A (General Knowledge with URLs) - this is mandatory for every response. DO NOT SKIP THIS.**
-3. For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
-4. For document information: Cite the document name as plain text (e.g., "According to 'Document Name' (Page X)..."). Do NOT format document citations as markdown links.
-5. **IF DOCUMENT CONTEXT IS PROVIDED ABOVE (not "No specific context"), you MUST ALSO include a "Part B" section with document findings AFTER Part A.**
-6. Every factual statement requires a citation. No exceptions.
-7. **DO NOT SKIP PART A. Every response must begin with general knowledge and citations with URLs. This is not optional.**
-8. **Response order: ALWAYS Part A first (general knowledge with URLs), THEN Part B (document findings) if context is provided.**
+Please provide information from the internal documents above that relates to the user's question. Cite the document sources using the format: "According to '[Document Name]' (Page X)..." Use plain text citations, NOT markdown links.`;
 
-Please formulate your response based on the guidelines provided in your system instructions.`;
-        console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);
-      }
+          // Build messages array for Process B (RAG documents only)
+          const ragMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+          conversationHistory.forEach(msg => {
+            if (msg.role === 'user' || msg.role === 'assistant') {
+              ragMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+            }
+          });
+          ragMessages.push({ role: "user", content: ragDocumentsUserPrompt });
 
-      // Build messages array with conversation history
-      const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-      
-      // Add conversation history
-      conversationHistory.forEach(msg => {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          messages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          const ragDocumentsResponse = await anthropic.messages.create({
+            model: modelToUse,
+            max_tokens: 3072,
+            system: ragDocumentsSystemPrompt,
+            messages: ragMessages,
+          });
+
+          if (ragDocumentsResponse.content && ragDocumentsResponse.content.length > 0) {
+            const firstTextBlock = ragDocumentsResponse.content.find(block => block.type === 'text') as Anthropic.TextBlock | undefined;
+            if (firstTextBlock) {
+              ragDocumentsText = firstTextBlock.text;
+            }
+          }
+
+          console.log('Chat API (Claude): Process B (RAG Documents) completed.');
+        } else {
+          console.log('Chat API (Claude): No RAG context found, skipping Process B.');
         }
-      });
-      
-      // Add current user message
-      messages.push({ role: "user", content: userPromptContent });
 
-      const claudeResponse = await anthropic.messages.create({
-        model: modelToUse,
-        max_tokens: 3072,
-        system: systemPrompt,
-        messages: messages,
-      });
-
-      let responseText = '';
-      if (claudeResponse.content && claudeResponse.content.length > 0) {
-        const firstTextBlock = claudeResponse.content.find(block => block.type === 'text') as Anthropic.TextBlock | undefined;
-        if (firstTextBlock) {
-          responseText = firstTextBlock.text;
-        }
+        // Return both responses
+        return NextResponse.json({ 
+          generalKnowledge: generalKnowledgeText, 
+          ragDocuments: ragDocumentsText 
+        }, { status: 200 });
       }
-      return NextResponse.json({ reply: responseText, fullResponse: claudeResponse }, { status: 200 });
 
     } else if (provider === 'openai') {
       const openai = new OpenAI({ apiKey });
 
-      // OpenAI path with citation requirements
-      if (chatMode === 'wellness') {
-        systemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries with FULL CITATION of all sources.
+      if (chatMode === 'general') {
+        const systemPrompt = "You are lucient, a helpful AI assistant.";
+        const userPromptContent = userMessage;
+
+        // Build messages array with conversation history for OpenAI
+        const openaiMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+          { role: 'system', content: systemPrompt }
+        ];
+        
+        // Add conversation history
+        conversationHistory.forEach(msg => {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            openaiMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          }
+        });
+        
+        // Add current user message
+        openaiMessages.push({ role: 'user', content: userPromptContent });
+
+        const openAiResponse = await openai.chat.completions.create({
+          model: modelToUse,
+          messages: openaiMessages,
+          max_tokens: 3072,
+        });
+
+        const responseText = openAiResponse.choices[0]?.message?.content || '';
+        return NextResponse.json({ reply: responseText, fullResponse: openAiResponse }, { status: 200 });
+      } else { // 'wellness' mode - TWO SEPARATE PROCESSES
+        // PROCESS A: General Knowledge (no RAG context)
+        console.log('Chat API (OpenAI): Starting Process A - General Knowledge search.');
+        const generalKnowledgeSystemPrompt = `You are lucient, an intelligent assistant. Your primary goal is to provide accurate, comprehensive, and well-structured answers to user queries with FULL CITATION of all sources.
 
 **CRITICAL RULE - NO EXCEPTIONS: ALL ANSWERS MUST INCLUDE CITATIONS**
 Every single factual claim, statement, or piece of information you provide MUST be attributed to a source. This is not optional - it is mandatory.
 
-**Response Structure:**
-1. **General Knowledge Foundation:** Begin with widely accepted understanding, citing sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)").
-2. **Document-Specific Findings:** If document context is provided, present it with citations (e.g., "According to '[Document Name]' (Page X)...").
+**MANDATORY CITATION WITH LINKS:** For general knowledge, cite sources with URLs when available. Use this format: "According to [source name/institution] ([URL])" or "Research from [institution/organization] ([URL]) indicates..." or "The [field] literature ([URL if available]) suggests..."
 
-**MANDATORY:** Every factual statement requires a citation. No exceptions.`;
-        userPromptContent = `Internal Document Context:
+**CRITICAL:** When you cite a source, include the actual URL if you know it. For example:
+- "According to the American Academy of Pediatrics (https://www.aap.org/...)"
+- "Research from Harvard Medical School (https://www.health.harvard.edu/...) indicates..."
+- "The CDC states (https://www.cdc.gov/...)..."
+
+If you don't know the specific URL, still cite the source but note it: "According to the American Academy of Pediatrics (see aap.org for more information)..."
+
+Format citations clearly so users can verify and click through to sources.`;
+
+        const generalKnowledgeUserPrompt = userMessage;
+
+        // Build messages array for Process A (general knowledge only)
+        const generalMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+          { role: 'system', content: generalKnowledgeSystemPrompt }
+        ];
+        conversationHistory.forEach(msg => {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            generalMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          }
+        });
+        generalMessages.push({ role: 'user', content: generalKnowledgeUserPrompt });
+
+        const generalKnowledgeResponse = await openai.chat.completions.create({
+          model: modelToUse,
+          messages: generalMessages,
+          max_tokens: 3072,
+        });
+
+        const generalKnowledgeText = generalKnowledgeResponse.choices[0]?.message?.content || '';
+        console.log('Chat API (OpenAI): Process A (General Knowledge) completed.');
+
+        // PROCESS B: RAG Documents (only if context was retrieved)
+        let ragDocumentsText: string | null = null;
+        if (retrievedContext && retrievedContext.trim() !== '') {
+          console.log('Chat API (OpenAI): Starting Process B - RAG Documents search.');
+          const ragDocumentsSystemPrompt = `You are lucient, an intelligent assistant. Your task is to provide information from internal research documents with proper citations.
+
+**CRITICAL RULES:**
+1. You MUST cite the specific document source for EVERY piece of information from the documents.
+2. Citation format: "According to '[Document Name]' (Page X, if available)..." or "The '[Document Name]' document states..."
+3. **CRITICAL:** Document citations must be plain text, NOT markdown links. Do NOT format them as [Document Name](url). Just use the document name in quotes: "According to 'Document Name' (Page X)..."
+4. The context provided includes "Source: [document_name]" - use this exact document name in your citation.
+5. If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
+6. Present ALL relevant information from the documents that relates to the query.
+7. If the document information contradicts or differs from general knowledge, clearly state this difference.`;
+
+          const ragDocumentsUserPrompt = `Internal Document Context:
 <document_context>
-${retrievedContext || "No specific context was retrieved from internal documents for this query."}
+${retrievedContext}
 </document_context>
 
-User's Question: ${userMessage}
+User's Question:
+<user_question>
+${userMessage}
+</user_question>
 
-**REMINDER: You MUST include citations for ALL information in your response.**
-- For general knowledge: Cite sources with URLs
-- For document information: Cite the document name
-- Every factual statement requires a citation. No exceptions.`;
-      } else {
-        systemPrompt = "You are lucient, a helpful AI assistant.";
-        userPromptContent = userMessage;
-      }
+Please provide information from the internal documents above that relates to the user's question. Cite the document sources using the format: "According to '[Document Name]' (Page X)..." Use plain text citations, NOT markdown links.`;
 
-      // Build messages array with conversation history for OpenAI
-      const openaiMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system', content: systemPrompt }
-      ];
-      
-      // Add conversation history
-      conversationHistory.forEach(msg => {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          openaiMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          // Build messages array for Process B (RAG documents only)
+          const ragMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+            { role: 'system', content: ragDocumentsSystemPrompt }
+          ];
+          conversationHistory.forEach(msg => {
+            if (msg.role === 'user' || msg.role === 'assistant') {
+              ragMessages.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+            }
+          });
+          ragMessages.push({ role: 'user', content: ragDocumentsUserPrompt });
+
+          const ragDocumentsResponse = await openai.chat.completions.create({
+            model: modelToUse,
+            messages: ragMessages,
+            max_tokens: 3072,
+          });
+
+          ragDocumentsText = ragDocumentsResponse.choices[0]?.message?.content || '';
+          console.log('Chat API (OpenAI): Process B (RAG Documents) completed.');
+        } else {
+          console.log('Chat API (OpenAI): No RAG context found, skipping Process B.');
         }
-      });
-      
-      // Add current user message
-      openaiMessages.push({ role: 'user', content: userPromptContent });
 
-      const openAiResponse = await openai.chat.completions.create({
-        model: modelToUse,
-        messages: openaiMessages,
-        max_tokens: 3072,
-      });
-
-      const responseText = openAiResponse.choices[0]?.message?.content || '';
-      return NextResponse.json({ reply: responseText, fullResponse: openAiResponse }, { status: 200 });
+        // Return both responses
+        return NextResponse.json({ 
+          generalKnowledge: generalKnowledgeText, 
+          ragDocuments: ragDocumentsText 
+        }, { status: 200 });
+      }
     } else {
       return NextResponse.json({ error: `Unsupported provider: ${provider}` }, { status: 400 });
     }

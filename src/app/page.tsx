@@ -195,13 +195,49 @@ export default function HomePage() {
       }
 
       const data = await response.json();
-      const assistantMessage: ChatMessage = { role: 'assistant', content: data.reply };
-      console.log('🟢 CLIENT: Adding assistant message:', assistantMessage);
-      setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages, assistantMessage];
-        console.log('🟢 CLIENT: Final messages array:', updatedMessages);
-        return updatedMessages;
-      });
+      
+      // Check if this is a two-process response (wellness mode)
+      if (data.generalKnowledge !== undefined && data.ragDocuments !== undefined) {
+        // Two-process response: Create two separate assistant messages
+        console.log('🟢 CLIENT: Two-process response detected (wellness mode).');
+        
+        // Process A: General Knowledge
+        const generalKnowledgeMessage: ChatMessage = { 
+          role: 'assistant', 
+          content: data.generalKnowledge 
+        };
+        console.log('🟢 CLIENT: Adding general knowledge message:', generalKnowledgeMessage);
+        
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages, generalKnowledgeMessage];
+          console.log('🟢 CLIENT: Updated messages array after general knowledge:', updatedMessages);
+          return updatedMessages;
+        });
+        
+        // Process B: RAG Documents (if available)
+        if (data.ragDocuments && data.ragDocuments.trim() !== '') {
+          const ragDocumentsMessage: ChatMessage = { 
+            role: 'assistant', 
+            content: data.ragDocuments 
+          };
+          console.log('🟢 CLIENT: Adding RAG documents message:', ragDocumentsMessage);
+          
+          setMessages(prevMessages => {
+            const updatedMessages = [...prevMessages, ragDocumentsMessage];
+            console.log('🟢 CLIENT: Final messages array after RAG documents:', updatedMessages);
+            return updatedMessages;
+          });
+        }
+      } else {
+        // Single response (general mode)
+        const assistantMessage: ChatMessage = { role: 'assistant', content: data.reply };
+        console.log('🟢 CLIENT: Adding assistant message:', assistantMessage);
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages, assistantMessage];
+          console.log('🟢 CLIENT: Final messages array:', updatedMessages);
+          return updatedMessages;
+        });
+      }
 
     } catch (error: unknown) {
       console.error("Error sending message to", selectedProvider, ":", error);
@@ -374,13 +410,31 @@ export default function HomePage() {
                   )}
                   {messages.map((msg, index) => {
                     console.log(`🟢 CLIENT: Rendering message ${index}:`, msg);
+                    
+                    // Determine if this is a wellness mode two-process response
+                    // In wellness mode, two consecutive assistant messages mean:
+                    // - First one: General Knowledge (Process A)
+                    // - Second one: RAG Documents (Process B)
+                    const isWellnessMode = chatMode === 'wellness';
+                    const prevMessage = index > 0 ? messages[index - 1] : null;
+                    const isSecondAssistantMessage = isWellnessMode && 
+                      msg.role === 'assistant' && 
+                      prevMessage?.role === 'assistant' &&
+                      index > 0;
+                    
                     return (
-                      <div key={index} className={`mb-3 p-3 rounded-lg max-w-[80%] transition-smooth ${
-                        msg.role === 'user' ? 'bg-gradient-primary text-primary-foreground ml-auto glow-primary' : 
-                        msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
-                        'bg-destructive text-destructive-foreground mr-auto font-semibold' 
-                      }`}>
-                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                      <div key={index} className="mb-3">
+                        {isWellnessMode && msg.role === 'assistant' && (
+                          <div className="text-xs text-muted-foreground mb-1 mr-auto font-medium">
+                            {isSecondAssistantMessage ? '📄 From Our Documents' : '🌐 General Knowledge'}
+                          </div>
+                        )}
+                        <div className={`p-3 rounded-lg max-w-[80%] transition-smooth ${
+                          msg.role === 'user' ? 'bg-gradient-primary text-primary-foreground ml-auto glow-primary' : 
+                          msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
+                          'bg-destructive text-destructive-foreground mr-auto font-semibold' 
+                        }`}>
+                          <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
                           <ReactMarkdown
                             components={{
                               // Make links open in new tab and style them

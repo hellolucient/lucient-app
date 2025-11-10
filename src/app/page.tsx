@@ -435,34 +435,35 @@ export default function HomePage() {
                           'bg-destructive text-destructive-foreground mr-auto font-semibold' 
                         }`}>
                           <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown
-                            components={{
-                              // Make links open in new tab and style them
-                              a: ({ ...props }) => (
-                                <a
-                                  {...props}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary underline hover:text-primary/80 break-all"
-                                />
-                              ),
-                              // Style headings
-                              h1: ({ ...props }) => <h1 {...props} className="text-lg font-bold mt-4 mb-2" />,
-                              h2: ({ ...props }) => <h2 {...props} className="text-base font-bold mt-3 mb-2" />,
-                              h3: ({ ...props }) => <h3 {...props} className="text-sm font-semibold mt-2 mb-1" />,
-                              // Style lists
-                              ul: ({ ...props }) => <ul {...props} className="list-disc list-inside my-2 space-y-1" />,
-                              ol: ({ ...props }) => <ol {...props} className="list-decimal list-inside my-2 space-y-1" />,
-                              li: ({ ...props }) => <li {...props} className="ml-2" />,
-                              // Style paragraphs
-                              p: ({ ...props }) => <p {...props} className="mb-2" />,
-                              // Style bold and italic
-                              strong: ({ ...props }) => <strong {...props} className="font-semibold" />,
-                              em: ({ ...props }) => <em {...props} className="italic" />,
-                            }}
-                          >
-                            {preprocessMarkdown(msg.content)}
-                          </ReactMarkdown>
+                            <ReactMarkdown
+                              components={{
+                                // Make links open in new tab and style them
+                                a: ({ ...props }) => (
+                                  <a
+                                    {...props}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline hover:text-primary/80 break-all"
+                                  />
+                                ),
+                                // Style headings
+                                h1: ({ ...props }) => <h1 {...props} className="text-lg font-bold mt-4 mb-2" />,
+                                h2: ({ ...props }) => <h2 {...props} className="text-base font-bold mt-3 mb-2" />,
+                                h3: ({ ...props }) => <h3 {...props} className="text-sm font-semibold mt-2 mb-1" />,
+                                // Style lists
+                                ul: ({ ...props }) => <ul {...props} className="list-disc list-inside my-2 space-y-1" />,
+                                ol: ({ ...props }) => <ol {...props} className="list-decimal list-inside my-2 space-y-1" />,
+                                li: ({ ...props }) => <li {...props} className="ml-2" />,
+                                // Style paragraphs
+                                p: ({ ...props }) => <p {...props} className="mb-2" />,
+                                // Style bold and italic
+                                strong: ({ ...props }) => <strong {...props} className="font-semibold" />,
+                                em: ({ ...props }) => <em {...props} className="italic" />,
+                              }}
+                            >
+                              {preprocessMarkdown(msg.content)}
+                            </ReactMarkdown>
+                          </div>
                         </div>
                       </div>
                     );

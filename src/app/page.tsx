@@ -98,7 +98,10 @@ export default function HomePage() {
       return 'Anthropic (Claude)';
     }
     const model = openAIModels.find(m => m.value === selectedOpenAIModel);
-    return model ? `OpenAI (${model.label})` : 'Select a model';
+    if (!model) return 'Select a model';
+    // Extract just the model name (before the dash) for the button to avoid overflow
+    const modelName = model.label.split(' - ')[0];
+    return `OpenAI (${modelName})`;
   };
 
   useEffect(() => {

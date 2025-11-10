@@ -139,7 +139,8 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('[API/DOCS_UPSERT] Starting chunking...');
-    const chunks = await getDocumentChunks(fileContent, { chunkSize: 1000, chunkOverlap: 200 });
+    // Use improved chunking defaults: 1500 chars with 400 char overlap for better context preservation
+    const chunks = await getDocumentChunks(fileContent);
     console.log(`[API/DOCS_UPSERT] File chunked into ${chunks.length} pieces.`);
 
     if (chunks.length === 0) {

@@ -205,6 +205,23 @@ export async function POST(request: NextRequest) {
             if (hasPregnancy || hasBirthday) {
               console.log(`      >>> Page 13 chunk contains: pregnancy=${hasPregnancy}, birthday/2nd=${hasBirthday}`);
             }
+            // Log the FULL text of Page 13 chunk to see if quote is there
+            console.log(`      >>> Page 13 chunk FULL TEXT (${fullText.length} chars): "${fullText}"`);
+            // Search for the specific phrase pattern
+            const searchPatterns = [
+              'between pregnancy and',
+              'pregnancy and a child',
+              'pregnancy and child',
+              '2nd birthday',
+              'second birthday'
+            ];
+            searchPatterns.forEach(pattern => {
+              const index = fullText.toLowerCase().indexOf(pattern.toLowerCase());
+              if (index !== -1) {
+                const context = fullText.substring(Math.max(0, index - 100), Math.min(fullText.length, index + 200));
+                console.log(`      >>> Found "${pattern}" at position ${index}: "${context}..."`);
+              }
+            });
           }
         });
 

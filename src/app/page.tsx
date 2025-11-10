@@ -18,6 +18,53 @@ import TextareaAutosize from 'react-textarea-autosize';
 import Image from 'next/image';
 import { ChevronDown, Check, Info } from 'lucide-react';
 
+// Utility function to convert URLs in text to clickable links
+const linkifyText = (text: string): React.ReactNode => {
+  // Regex to match URLs (http, https, www) - handles URLs in parentheses
+  const urlRegex = /(https?:\/\/[^\s\)]+|www\.[^\s\)]+)/g;
+  const matches = Array.from(text.matchAll(urlRegex));
+  
+  if (matches.length === 0) {
+    return <span>{text}</span>;
+  }
+  
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  
+  matches.forEach((match, index) => {
+    const matchIndex = match.index!;
+    const matchText = match[0];
+    
+    // Add text before the URL
+    if (matchIndex > lastIndex) {
+      parts.push(<span key={`text-${index}`}>{text.slice(lastIndex, matchIndex)}</span>);
+    }
+    
+    // Add the clickable URL
+    const url = matchText.startsWith('http') ? matchText : `https://${matchText}`;
+    parts.push(
+      <a
+        key={`link-${index}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline hover:text-primary/80 break-all"
+      >
+        {matchText}
+      </a>
+    );
+    
+    lastIndex = matchIndex + matchText.length;
+  });
+  
+  // Add remaining text after last URL
+  if (lastIndex < text.length) {
+    parts.push(<span key="text-end">{text.slice(lastIndex)}</span>);
+  }
+  
+  return <>{parts}</>;
+};
+
 // Define a type for individual messages in the chat
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'error';
@@ -369,7 +416,9 @@ export default function HomePage() {
                         msg.role === 'assistant' ? 'bg-muted/80 backdrop-blur-sm text-muted-foreground mr-auto border border-border/30' : 
                         'bg-destructive text-destructive-foreground mr-auto font-semibold' 
                       }`}>
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        <div className="text-sm whitespace-pre-wrap">
+                          {linkifyText(msg.content)}
+                        </div>
                       </div>
                     );
                   })}

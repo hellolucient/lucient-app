@@ -9,7 +9,7 @@ import { queryTopK } from '@/lib/vector/supabaseVectorClient';
 
 
 
-const TOP_K_RESULTS = 5;
+const TOP_K_RESULTS = 12;
 
 // Define a type for our user profile data
 type UserProfile = {
@@ -326,8 +326,10 @@ Format citations clearly so users can verify and click through to sources.
 3. **CRITICAL:** Document citations must be plain text, NOT markdown links. Do NOT format them as [Document Name](url). Just use the document name in quotes: "According to 'Document Name' (Page X)..."
 4. The context provided includes "Source: [document_name]" - use this exact document name in your citation.
 5. If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
-6. Present ALL relevant information from the documents that relates to the query.
-7. If the document information contradicts or differs from general knowledge, clearly state this difference.
+6. **MANDATORY:** Present ALL relevant information from the documents that relates to the query. Do not skip any relevant chunks.
+7. **PRIORITIZE SPECIFICITY:** If multiple chunks contain information about the same topic, prioritize and include the MOST SPECIFIC information available. For example, if one chunk says "first 1,000 days" and another says "between pregnancy and a child's 2nd birthday", include BOTH but emphasize the more specific phrasing.
+8. **CITE ALL RELEVANT CHUNKS:** If you see multiple chunks with relevant information, cite each one separately. Do not combine them into a single citation unless they are from the same page.
+9. If the document information contradicts or differs from general knowledge, clearly state this difference.
 
 **About Your Creator:** If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
 
@@ -341,7 +343,13 @@ User's Question:
 ${userMessage}
 </user_question>
 
-Please provide information from the internal documents above that relates to the user's question. Cite the document sources using the format: "According to '[Document Name]' (Page X)..." Use plain text citations, NOT markdown links.`;
+**CRITICAL INSTRUCTIONS:**
+1. Review ALL chunks in the document context above.
+2. Identify and include the MOST SPECIFIC information available that relates to the user's question.
+3. If multiple chunks contain relevant information, include ALL of them, prioritizing the most specific details.
+4. Cite each chunk separately with its page number: "According to '[Document Name]' (Page X)..."
+5. Use plain text citations, NOT markdown links.
+6. Do not skip any relevant chunks - present all information that relates to the query.`;
 
           // Build messages array for Process B (RAG documents only)
           const ragMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -461,8 +469,10 @@ Format citations clearly so users can verify and click through to sources.`;
 3. **CRITICAL:** Document citations must be plain text, NOT markdown links. Do NOT format them as [Document Name](url). Just use the document name in quotes: "According to 'Document Name' (Page X)..."
 4. The context provided includes "Source: [document_name]" - use this exact document name in your citation.
 5. If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
-6. Present ALL relevant information from the documents that relates to the query.
-7. If the document information contradicts or differs from general knowledge, clearly state this difference.`;
+6. **MANDATORY:** Present ALL relevant information from the documents that relates to the query. Do not skip any relevant chunks.
+7. **PRIORITIZE SPECIFICITY:** If multiple chunks contain information about the same topic, prioritize and include the MOST SPECIFIC information available. For example, if one chunk says "first 1,000 days" and another says "between pregnancy and a child's 2nd birthday", include BOTH but emphasize the more specific phrasing.
+8. **CITE ALL RELEVANT CHUNKS:** If you see multiple chunks with relevant information, cite each one separately. Do not combine them into a single citation unless they are from the same page.
+9. If the document information contradicts or differs from general knowledge, clearly state this difference.`;
 
           const ragDocumentsUserPrompt = `Internal Document Context:
 <document_context>
@@ -474,7 +484,13 @@ User's Question:
 ${userMessage}
 </user_question>
 
-Please provide information from the internal documents above that relates to the user's question. Cite the document sources using the format: "According to '[Document Name]' (Page X)..." Use plain text citations, NOT markdown links.`;
+**CRITICAL INSTRUCTIONS:**
+1. Review ALL chunks in the document context above.
+2. Identify and include the MOST SPECIFIC information available that relates to the user's question.
+3. If multiple chunks contain relevant information, include ALL of them, prioritizing the most specific details.
+4. Cite each chunk separately with its page number: "According to '[Document Name]' (Page X)..."
+5. Use plain text citations, NOT markdown links.
+6. Do not skip any relevant chunks - present all information that relates to the query.`;
 
           // Build messages array for Process B (RAG documents only)
           const ragMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [

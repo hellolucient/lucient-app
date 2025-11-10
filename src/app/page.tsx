@@ -39,13 +39,12 @@ type UserProfile = {
   message_credits: number;
 };
 
-// Define available OpenAI models
+// Define available OpenAI models - Optimized for Wellness RAG
 const openAIModels = [
-  { value: "gpt-4o", label: "GPT-4o (Omni)" },
-  { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
-  { value: "gpt-4", label: "GPT-4" },
-  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
-  // Add other models as needed, e.g., gpt-4o when available and desired
+  { value: "gpt-4o", label: "GPT-4o (Omni) - Recommended for Wellness" },
+  { value: "gpt-4-turbo", label: "GPT-4 Turbo - For Complex Analysis" },
+  { value: "gpt-4", label: "GPT-4 - Legacy" },
+  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo - Budget Option" },
 ];
 
 const LoadingSpinner = () => (

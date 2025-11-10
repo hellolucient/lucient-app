@@ -1,6 +1,6 @@
 # lucient - Your Intelligent Assistant
 
-`lucient` is a Next.js 15 application designed as an intelligent assistant. It integrates with various AI models for chat and image generation, and uses a Retrieval Augmented Generation (RAG) pipeline with Qdrant to provide context-aware responses based on uploaded documents.
+`lucient` is a Next.js 15 application designed as an intelligent assistant. It integrates with various AI models for chat and image generation, and uses a Retrieval Augmented Generation (RAG) pipeline with Supabase pgvector to provide context-aware responses based on uploaded documents.
 
 ## Core Technologies
 
@@ -8,7 +8,7 @@
 *   **Language**: [TypeScript](https://www.typescriptlang.org/)
 *   **Styling**: [Tailwind CSS](https://tailwindcss.com/) with [Shadcn/UI](https://ui.shadcn.com/) component library
 *   **Authentication**: [Supabase Auth](https://supabase.com/docs/guides/auth) (using `@supabase/ssr`)
-*   **Vector Database**: [Qdrant Cloud](https://qdrant.tech/cloud/) (for RAG)
+*   **Vector Database**: [Supabase pgvector](https://supabase.com/docs/guides/ai) (for RAG)
 *   **AI SDKs**:
     *   `@anthropic-ai/sdk` (for Claude models)
     *   `openai` (for GPT models and DALL-E)
@@ -41,20 +41,20 @@
     *   Interface for submitting image prompts.
     *   Backend API (`/api/image/generate/route.ts`) to call DALL·E 3 and return image URLs.
 *   **Retrieval Augmented Generation (RAG)**:
-    *   **Document Upload**:
-        *   Users can upload `.txt`, `.pdf`, `.doc`, and `.docx` files via settings page.
+    *   **Document Upload** (Admin Only):
+        *   Admins can upload `.txt`, `.pdf`, `.doc`, and `.docx` files via settings page.
         *   Backend API (`/api/documents/upsert/route.ts`) processes files:
             *   Extracts text content.
             *   Chunks text using `langchain/text_splitter`.
             *   Generates embeddings using OpenAI's `text-embedding-3-small` model.
-            *   Upserts embeddings and metadata to a Qdrant Cloud collection.
+            *   Upserts embeddings and metadata to Supabase using pgvector extension.
+    *   **Shared Knowledge Base**:
+        *   Documents are stored in a shared knowledge base accessible to all authenticated users.
+        *   RLS policies ensure all users can read documents, but only admins can upload/modify.
     *   **Contextualized Chat**:
-        *   Chat APIs (`/api/chat/...`) query Qdrant for relevant document chunks based on the user's message.
+        *   Chat APIs (`/api/chat/...`) query Supabase for relevant document chunks based on the user's message.
         *   Retrieved context is prepended to the prompt sent to the LLM, enabling context-aware responses.
-*   **Qdrant Setup & Verification**:
-    *   `scripts/setupQdrant.ts`:
-        *   Ensures the specified Qdrant collection (e.g., `lucient_documents`) exists, creating it if necessary with appropriate vector parameters (1536 dimensions, Cosine distance).
-        *   Includes a utility to fetch and display sample points from the collection, verifying successful document uploads.
+        *   Wellness Chat mode uses the shared knowledge base; General Chat mode does not use RAG.
 *   **Next.js Configuration**:
     *   `next.config.js` updated to include `serverExternalPackages: ['pdf-parse']` to resolve bundling issues with `pdf-parse`.
 *   **Git Integration**:
@@ -65,11 +65,11 @@
 
 ```
 /lucient
-├── .env.local          # IMPORTANT: Supabase, Qdrant, OpenAI, Anthropic keys
+├── .env.local          # IMPORTANT: Supabase, OpenAI, Anthropic keys
 ├── next.config.js      # Next.js configuration (e.g., serverExternalPackages)
 ├── package.json        # Dependencies and scripts
-├── scripts/
-│   └── setupQdrant.ts  # Script to initialize Qdrant collection and verify uploads
+├── supabase/
+│   └── migrations/     # Database migrations including pgvector setup
 ├── src/
 │   ├── app/
 │   │   ├── (main)/
@@ -95,7 +95,7 @@
 │   │   │   └── openai.ts
 │   │   ├── supabase/                    # Supabase client and auth helpers (ssr)
 │   │   ├── user-keys.ts                   # Helpers for user API key management
-│   │   ├── vector/                      # Qdrant client, collection setup, querying
+│   │   ├── vector/                      # Supabase vector client, querying
 │   │   └── textProcessing/              # Text chunking logic
 │   └── middleware.ts                    # Route protection
 ├── ... (other standard Next.js files and folders)
@@ -107,8 +107,7 @@
 
 *   [Node.js](https://nodejs.org/) (LTS version, e.g., v18 or v20)
 *   [npm](https://www.npmjs.com/) (or yarn/pnpm)
-*   A [Supabase](https://supabase.com/) project (for authentication and database)
-*   A [Qdrant Cloud](https://qdrant.tech/cloud/) instance (or local Qdrant setup)
+*   A [Supabase](https://supabase.com/) project (for authentication, database, and vector storage)
 *   API Keys for:
     *   [OpenAI](https://platform.openai.com/signup/) (for GPT models, DALL-E, and embeddings)
     *   [Anthropic](https://console.anthropic.com/) (for Claude models) - Ensure you have credits.
@@ -131,11 +130,6 @@
     NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_project_anon_key
     SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key # If needed for admin tasks from backend
 
-    # Qdrant
-    QDRANT_URL=your_qdrant_instance_url # e.g., https://your-cluster-id.region.aws.cloud.qdrant.io:6333
-    QDRANT_API_KEY=your_qdrant_api_key
-    QDRANT_COLLECTION_NAME=lucient_documents # Or your preferred collection name
-
     # AI Providers
     OPENAI_API_KEY=your_openai_api_key
     ANTHROPIC_API_KEY=your_anthropic_api_key # (Stored by users, but good for testing admin features if any)
@@ -145,22 +139,18 @@
     ```
     *   **Important**: `ENCRYPTION_KEY` must be a 32-character (256-bit) string for AES-256-GCM used in API key encryption.
     *   You can find Supabase URL and Anon Key in your Supabase project settings under "API".
-    *   For Qdrant Cloud, get the URL and API key from your cluster details.
 
 4.  **Ensure your Supabase project has Email Authentication enabled.**
     *   Go to your Supabase Dashboard -> Authentication -> Providers -> Email. Make sure it's enabled.
     *   (Recommended for development) Disable "Confirm email" under Authentication -> Providers -> Email, or ensure you have a way to click confirmation links.
 
-5.  **Set up Qdrant Collection:**
-    Run the setup script to ensure your Qdrant collection is created with the correct configuration:
-    ```bash
-    npx tsx ./scripts/setupQdrant.ts
-    ```
-    This script will:
-    *   Connect to your Qdrant instance using the URL and API key from `.env.local`.
-    *   Check if the collection (defined by `QDRANT_COLLECTION_NAME`) exists.
-    *   If not, it creates the collection with a vector size of 1536 (for OpenAI `text-embedding-3-small`) and Cosine distance metric.
-    *   It will also attempt to list a few sample points if the collection already exists or after creating it, which helps verify the setup.
+5.  **Set up Supabase Database:**
+    Run the database migrations to set up the required tables and pgvector extension:
+    *   Go to your Supabase Dashboard -> SQL Editor
+    *   Run the migration files from `supabase/migrations/` in order:
+        *   `20250101100300_add_vector_extension_and_documents_table.sql` - Sets up pgvector and documents table
+        *   `20250101100400_update_documents_rls_for_shared_knowledge_base.sql` - Configures RLS for shared knowledge base
+    *   This will create the `documents` table with vector support and set up Row Level Security policies.
 
 ### Running the Development Server
 
@@ -172,14 +162,18 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-## Verifying Document Uploads to Qdrant
+## Verifying Document Uploads
 
-After uploading documents through the application's UI, you can re-run the Qdrant setup script to see a sample of the newly ingested points:
+After uploading documents through the application's UI (as an admin), you can verify they were stored correctly:
 
-```bash
-npx tsx ./scripts/setupQdrant.ts
-```
-Look for the "Attempting to retrieve up to 5 sample points..." section in the output. This will show the IDs and payloads of some of the points in your collection, allowing you to confirm that your documents were chunked, embedded, and stored correctly.
+1. **Via Supabase Dashboard:**
+    *   Go to your Supabase Dashboard -> Table Editor -> `documents` table
+    *   You should see rows with `chunk_text`, `file_name`, and `embedding` columns populated
+
+2. **Via Wellness Chat:**
+    *   Switch to "Wellness Chat" mode in the application
+    *   Ask a question related to your uploaded documents
+    *   The AI should respond with context from your documents
 
 ## Key Modules and Files
 
@@ -188,12 +182,11 @@ Look for the "Attempting to retrieve up to 5 sample points..." section in the ou
 *   **Chat Logic**: `src/app/page.tsx` (UI), `/api/chat/` (backend routes)
 *   **Image Generation**: `src/app/page.tsx` (UI), `/api/image/generate/route.ts`
 *   **RAG Pipeline**:
-    *   Upload UI: `src/app/(main)/settings/api-keys/page.tsx`
+    *   Upload UI: `src/app/(main)/settings/page.tsx` (admin only)
     *   Upload API: `/api/documents/upsert/route.ts`
     *   Chunking: `src/lib/textProcessing/chunking.ts`
     *   Embeddings: `src/lib/ai/embeddingUtils.ts`
-    *   Qdrant Client & Queries: `src/lib/vector/qdrantClient.ts`, `src/lib/vector/query.ts`
-*   **Qdrant Management Script**: `scripts/setupQdrant.ts`
+    *   Supabase Vector Client & Queries: `src/lib/vector/supabaseVectorClient.ts`
 
 ## Known Issues & Future Improvements
 

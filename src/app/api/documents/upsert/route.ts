@@ -6,8 +6,6 @@ import { upsertDocumentChunks } from '@/lib/vector/supabaseVectorClient';
 import mammoth from 'mammoth'; // For .doc, .docx
 import * as pdf from 'pdf-parse/lib/pdf-parse.js'; // For .pdf
 
-// Define a more specific type for the document payload sent to Qdrant
-
 
 const ALLOWED_FILE_TYPES = [
   'text/plain',
@@ -44,6 +42,23 @@ export async function POST(req: NextRequest) {
   if (authError || !user) {
     console.error('[API/DOCS_UPSERT] Unauthorized access:', authError);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Check if user is admin - only admins can upload documents to shared knowledge base
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('user_tier')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || !profile) {
+    console.error('[API/DOCS_UPSERT] Error fetching user profile:', profileError?.message);
+    return NextResponse.json({ error: 'Failed to fetch user profile.' }, { status: 500 });
+  }
+
+  if (profile.user_tier !== 'admin') {
+    console.error(`[API/DOCS_UPSERT] Non-admin user ${user.id} attempted to upload document.`);
+    return NextResponse.json({ error: 'Only admins can upload documents to the knowledge base.' }, { status: 403 });
   }
 
   try {

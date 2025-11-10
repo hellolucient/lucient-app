@@ -95,10 +95,20 @@ export async function queryTopK(
 
     if (error) {
       console.error('Error querying Supabase:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
 
     console.log(`Found ${data?.length || 0} results from Supabase.`);
+    if (data && data.length > 0) {
+      console.log(`First result similarity: ${(data[0] as { similarity?: number }).similarity?.toFixed(4)}`);
+      console.log(`First result file: ${(data[0] as { file_name?: string }).file_name}`);
+    } else {
+      console.log(`No results found with threshold ${matchThreshold}. This might indicate:`);
+      console.log(`- Threshold too high (try lowering below 0.3)`);
+      console.log(`- No documents in database matching the query`);
+      console.log(`- RLS policy blocking access`);
+    }
 
     // Map to QueryResult structure for compatibility
     return (data || []).map((result: Record<string, unknown>) => ({

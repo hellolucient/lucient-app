@@ -163,8 +163,8 @@ export async function POST(request: NextRequest) {
     try {
       console.log(`Chat API: Retrieving context for user message: "${userMessage.substring(0, 100)}..."`);
       // Query all documents (shared knowledge base) - pass undefined instead of user.id
-      // Using lower threshold (0.5) to get more results, but we can adjust if needed
-      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, undefined, 0.5);
+      // Using very low threshold (0.3) to ensure we get results - cosine similarity can be lower for semantic matches
+      const contextResults = await queryTopK(userMessage, TOP_K_RESULTS, undefined, 0.3);
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {

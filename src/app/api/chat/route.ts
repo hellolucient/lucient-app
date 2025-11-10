@@ -239,10 +239,12 @@ Every single factual claim, statement, or piece of information you provide MUST 
 **EXAMPLE OF CORRECT FORMAT:**
 Question: "What is the most critical time for cognitive development?"
 Correct Response Format:
-"According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning. The CDC states (https://www.cdc.gov/...) that early childhood experiences shape brain architecture...
+"According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning. The CDC states (https://www.cdc.gov/...) that early childhood experiences shape brain architecture. The National Institute of Child Health and Human Development (https://www.nichd.nih.gov/...) emphasizes the importance of early brain development...
 
 ### From Our Research Documents:
 According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from pregnancy to a child's 2nd birthday are the most critical time for cognitive, physical and social development..."
+
+**NOTE:** Notice that Part A (general knowledge with URLs) comes FIRST, then Part B (document findings) comes SECOND. This order is mandatory.
 
 **YOU MUST FOLLOW THIS FORMAT FOR EVERY RESPONSE.**
 **BOTH PARTS ARE MANDATORY:**
@@ -272,7 +274,7 @@ According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from preg
 *   Citation format: "According to '[Document Name]' (Page X, if available)..." or "The '[Document Name]' document states..."
 *   The context provided includes "Source: [document_name]" - use this exact document name in your citation.
 *   If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
-*   **Note:** Document citations will be formatted as clickable links in the UI, so use the exact document name as provided.
+*   **CRITICAL:** Document citations must be plain text, NOT markdown links. Do NOT format them as [Document Name](url). Just use the document name in quotes: "According to 'Document Name' (Page X)..."
 *   Present ALL relevant information from the documents that relates to the query.
 *   If the document information contradicts or differs from general knowledge, clearly state this difference.
 *   **If you see document context but don't include it in your response, your answer is incomplete and incorrect.**
@@ -290,8 +292,8 @@ According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from preg
 **Citation Requirements:**
 1.  Every factual claim must have a citation.
 2.  Citations must be clear and verifiable.
-3.  For document sources, use the exact document name provided in the context (these will be made clickable in the UI).
-4.  For general knowledge, cite authoritative sources (institutions, organizations, research bodies) WITH URLs when available.
+3.  For document sources, use the exact document name provided in the context as plain text (e.g., "According to 'Document.pdf' (Page X)..."). Do NOT format document citations as markdown links.
+4.  For general knowledge, cite authoritative sources (institutions, organizations, research bodies) WITH URLs when available (e.g., "According to the CDC (https://www.cdc.gov/...)").
 5.  Format citations consistently throughout your response.
 6.  URLs should be included in parentheses immediately after the source name: "According to [Source] ([URL])..."
 7.  If a URL is not available, still cite the source but note it: "According to [Source] (see [website] for more information)..."
@@ -310,12 +312,13 @@ ${userMessage}
 
 **CRITICAL REMINDERS:**
 1. You MUST include citations for ALL information in your response.
-2. **YOU MUST ALWAYS START WITH PART A (General Knowledge with URLs) - this is mandatory for every response.**
+2. **YOU MUST ALWAYS START WITH PART A (General Knowledge with URLs) - this is mandatory for every response. DO NOT SKIP THIS.**
 3. For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
-4. For document information: Cite the document name (e.g., "According to '[Document Name]' (Page X)...")
-5. **IF DOCUMENT CONTEXT IS PROVIDED ABOVE (not "No specific context"), you MUST ALSO include a "Part B" section with document findings.**
+4. For document information: Cite the document name as plain text (e.g., "According to 'Document Name' (Page X)..."). Do NOT format document citations as markdown links.
+5. **IF DOCUMENT CONTEXT IS PROVIDED ABOVE (not "No specific context"), you MUST ALSO include a "Part B" section with document findings AFTER Part A.**
 6. Every factual statement requires a citation. No exceptions.
-7. **DO NOT SKIP PART A. Every response must begin with general knowledge and citations with URLs.**
+7. **DO NOT SKIP PART A. Every response must begin with general knowledge and citations with URLs. This is not optional.**
+8. **Response order: ALWAYS Part A first (general knowledge with URLs), THEN Part B (document findings) if context is provided.**
 
 Please formulate your response based on the guidelines provided in your system instructions.`;
         console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);

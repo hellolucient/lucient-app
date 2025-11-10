@@ -239,17 +239,20 @@ Every single factual claim, statement, or piece of information you provide MUST 
 **EXAMPLE OF CORRECT FORMAT:**
 Question: "What is the most critical time for cognitive development?"
 Correct Response Format:
-"According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning...
+"According to the American Academy of Pediatrics (https://www.aap.org/), the most critical period for cognitive development is from birth to age five. Research from Harvard Medical School (https://www.health.harvard.edu/) indicates that during this time, children's brains are highly receptive to learning. The CDC states (https://www.cdc.gov/...) that early childhood experiences shape brain architecture...
 
 ### From Our Research Documents:
 According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from pregnancy to a child's 2nd birthday are the most critical time for cognitive, physical and social development..."
 
 **YOU MUST FOLLOW THIS FORMAT FOR EVERY RESPONSE.**
-**IF DOCUMENT CONTEXT IS PROVIDED, YOU MUST INCLUDE A "From Our Research Documents" SECTION.**
+**BOTH PARTS ARE MANDATORY:**
+1. **Part A (General Knowledge with URLs) - ALWAYS REQUIRED**
+2. **Part B (Document Findings) - REQUIRED when document context is provided**
 
 **Response Structure (When Document Context is Available):**
 
-**Part A: General Knowledge Foundation**
+**Part A: General Knowledge Foundation - MANDATORY**
+*   **YOU MUST ALWAYS START WITH PART A, EVEN WHEN DOCUMENT CONTEXT IS PROVIDED.**
 *   Begin with the widely accepted, general understanding of the topic based on your training knowledge.
 *   Provide comprehensive context, explain key concepts, discuss related research or theories, and offer illustrative examples.
 *   **MANDATORY CITATION WITH LINKS:** For general knowledge, cite sources with URLs when available. Use this format: "According to [source name/institution] ([URL])" or "Research from [institution/organization] ([URL]) indicates..." or "The [field] literature ([URL if available]) suggests..."
@@ -259,6 +262,7 @@ According to 'Mental_Wellness_Chapter_1.pdf' (Page 45), the 1,000 days from preg
     *   "The CDC states (https://www.cdc.gov/...)..."
 *   If you don't know the specific URL, still cite the source but note it: "According to the American Academy of Pediatrics (see aap.org for more information)..."
 *   Format citations clearly so users can verify and click through to sources.
+*   **DO NOT SKIP THIS SECTION. Every response must include Part A with general knowledge and citations.**
 
 **Part B: Document-Specific Findings - MANDATORY WHEN CONTEXT IS PROVIDED**
 *   **CRITICAL:** If document context is provided in the <document_context> section, you MUST include a "Part B" section with document findings. This is not optional.
@@ -306,10 +310,12 @@ ${userMessage}
 
 **CRITICAL REMINDERS:**
 1. You MUST include citations for ALL information in your response.
-2. For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
-3. For document information: Cite the document name (e.g., "According to '[Document Name]' (Page X)...")
-4. **IF DOCUMENT CONTEXT IS PROVIDED ABOVE (not "No specific context"), you MUST include a "Part B" section with document findings.**
-5. Every factual statement requires a citation. No exceptions.
+2. **YOU MUST ALWAYS START WITH PART A (General Knowledge with URLs) - this is mandatory for every response.**
+3. For general knowledge: Cite sources with URLs (e.g., "According to the CDC (https://www.cdc.gov/...)")
+4. For document information: Cite the document name (e.g., "According to '[Document Name]' (Page X)...")
+5. **IF DOCUMENT CONTEXT IS PROVIDED ABOVE (not "No specific context"), you MUST ALSO include a "Part B" section with document findings.**
+6. Every factual statement requires a citation. No exceptions.
+7. **DO NOT SKIP PART A. Every response must begin with general knowledge and citations with URLs.**
 
 Please formulate your response based on the guidelines provided in your system instructions.`;
         console.log(`Chat API (Claude): Sending to Claude in wellness mode. Context retrieved: ${!!retrievedContext && retrievedContext !== 'Error retrieving context. Answering from general knowledge.'}`);

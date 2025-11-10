@@ -187,6 +187,11 @@ export async function POST(request: NextRequest) {
             if (patternIndex !== -1) {
               const context = fullText.substring(Math.max(0, patternIndex - 100), Math.min(fullText.length, patternIndex + 200));
               console.log(`  >>> Chunk [${chunkIndex + 1}] contains "${pattern}" at position ${patternIndex}: "${context}..."`);
+              
+              // If we found "between pregnancy and", log the FULL text of this chunk to see the complete quote
+              if (pattern === 'between pregnancy and') {
+                console.log(`  >>> Chunk [${chunkIndex + 1}] FULL TEXT (${fullText.length} chars): "${fullText}"`);
+              }
             }
           });
         });
@@ -408,8 +413,9 @@ Format citations clearly so users can verify and click through to sources.
 5. If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
 6. **MANDATORY:** Present ALL relevant information from the documents that relates to the query. Do not skip any relevant chunks.
 7. **PRIORITIZE SPECIFICITY:** If multiple chunks contain information about the same topic, prioritize and include the MOST SPECIFIC information available. For example, if one chunk says "first 1,000 days" and another says "between pregnancy and a child's 2nd birthday", include BOTH but emphasize the more specific phrasing.
-8. **CITE ALL RELEVANT CHUNKS:** If you see multiple chunks with relevant information, cite each one separately. Do not combine them into a single citation unless they are from the same page.
-9. If the document information contradicts or differs from general knowledge, clearly state this difference.
+8. **USE EXACT QUOTES:** When you see specific, detailed quotes in the document context (especially phrases like "between pregnancy and a child's 2nd birthday"), you MUST include the exact quote or very close paraphrase. Do not summarize away the specific details.
+9. **CITE ALL RELEVANT CHUNKS:** If you see multiple chunks with relevant information, cite each one separately. Do not combine them into a single citation unless they are from the same page.
+10. If the document information contradicts or differs from general knowledge, clearly state this difference.
 
 **About Your Creator:** If you are asked who created you, you must respond with: "lucient was created by AI, assisted by some curious wellness minds." Do not mention any specific person's name.`;
 
@@ -426,10 +432,12 @@ ${userMessage}
 **CRITICAL INSTRUCTIONS:**
 1. Review ALL chunks in the document context above.
 2. Identify and include the MOST SPECIFIC information available that relates to the user's question.
-3. If multiple chunks contain relevant information, include ALL of them, prioritizing the most specific details.
-4. Cite each chunk separately with its page number: "According to '[Document Name]' (Page X)..."
-5. Use plain text citations, NOT markdown links.
-6. Do not skip any relevant chunks - present all information that relates to the query.`;
+3. **MANDATORY:** If you see specific quotes or detailed phrasing (e.g., "between pregnancy and a child's 2nd birthday"), you MUST include them. Do not summarize away specific details.
+4. If multiple chunks contain relevant information, include ALL of them, prioritizing the most specific details.
+5. Cite each chunk separately with its page number: "According to '[Document Name]' (Page X)..."
+6. Use plain text citations, NOT markdown links.
+7. Do not skip any relevant chunks - present all information that relates to the query.
+8. **PRIORITY:** Look for the most specific phrasing available and include it verbatim or very close to verbatim.`;
 
           // Build messages array for Process B (RAG documents only)
           const ragMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -551,8 +559,9 @@ Format citations clearly so users can verify and click through to sources.`;
 5. If page numbers are available in the metadata, include them: "According to '[Document Name]' (Page 45)..."
 6. **MANDATORY:** Present ALL relevant information from the documents that relates to the query. Do not skip any relevant chunks.
 7. **PRIORITIZE SPECIFICITY:** If multiple chunks contain information about the same topic, prioritize and include the MOST SPECIFIC information available. For example, if one chunk says "first 1,000 days" and another says "between pregnancy and a child's 2nd birthday", include BOTH but emphasize the more specific phrasing.
-8. **CITE ALL RELEVANT CHUNKS:** If you see multiple chunks with relevant information, cite each one separately. Do not combine them into a single citation unless they are from the same page.
-9. If the document information contradicts or differs from general knowledge, clearly state this difference.`;
+8. **USE EXACT QUOTES:** When you see specific, detailed quotes in the document context (especially phrases like "between pregnancy and a child's 2nd birthday"), you MUST include the exact quote or very close paraphrase. Do not summarize away the specific details.
+9. **CITE ALL RELEVANT CHUNKS:** If you see multiple chunks with relevant information, cite each one separately. Do not combine them into a single citation unless they are from the same page.
+10. If the document information contradicts or differs from general knowledge, clearly state this difference.`;
 
           const ragDocumentsUserPrompt = `Internal Document Context:
 <document_context>
@@ -567,10 +576,12 @@ ${userMessage}
 **CRITICAL INSTRUCTIONS:**
 1. Review ALL chunks in the document context above.
 2. Identify and include the MOST SPECIFIC information available that relates to the user's question.
-3. If multiple chunks contain relevant information, include ALL of them, prioritizing the most specific details.
-4. Cite each chunk separately with its page number: "According to '[Document Name]' (Page X)..."
-5. Use plain text citations, NOT markdown links.
-6. Do not skip any relevant chunks - present all information that relates to the query.`;
+3. **MANDATORY:** If you see specific quotes or detailed phrasing (e.g., "between pregnancy and a child's 2nd birthday"), you MUST include them. Do not summarize away specific details.
+4. If multiple chunks contain relevant information, include ALL of them, prioritizing the most specific details.
+5. Cite each chunk separately with its page number: "According to '[Document Name]' (Page X)..."
+6. Use plain text citations, NOT markdown links.
+7. Do not skip any relevant chunks - present all information that relates to the query.
+8. **PRIORITY:** Look for the most specific phrasing available and include it verbatim or very close to verbatim.`;
 
           // Build messages array for Process B (RAG documents only)
           const ragMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [

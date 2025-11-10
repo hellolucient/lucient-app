@@ -195,6 +195,17 @@ export async function POST(request: NextRequest) {
             const quoteContext = fullText.substring(Math.max(0, quoteIndex - 50), Math.min(fullText.length, quoteIndex + 200));
             console.log(`      >>> Full quote context: "${quoteContext}..."`);
           }
+          
+          // If this chunk has Page 13 header, log more of it to see if quote is later
+          if (hasPage13 && !hasPregnancy2ndBirthday) {
+            console.log(`      >>> Page 13 chunk full text (first 500 chars): "${fullText.substring(0, 500)}..."`);
+            // Also check for variations of the quote
+            const hasPregnancy = fullText.toLowerCase().includes('pregnancy');
+            const hasBirthday = fullText.toLowerCase().includes('birthday') || fullText.toLowerCase().includes('2nd') || fullText.toLowerCase().includes('second');
+            if (hasPregnancy || hasBirthday) {
+              console.log(`      >>> Page 13 chunk contains: pregnancy=${hasPregnancy}, birthday/2nd=${hasBirthday}`);
+            }
+          }
         });
 
         const processedContextChunks = contextResults

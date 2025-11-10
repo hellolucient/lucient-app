@@ -168,6 +168,16 @@ export async function POST(request: NextRequest) {
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {
+        // Log detailed information about retrieved chunks
+        console.log(`Chat API: Retrieved ${contextResults.length} chunks. Details:`);
+        contextResults.forEach((result, index) => {
+          const pageNum = result.metadata?.page_number !== undefined ? `Page ${result.metadata.page_number}` : 'No page';
+          const fileName = result.file_name || 'Unknown';
+          const score = result.score?.toFixed(4) || 'N/A';
+          const preview = result.chunk_text?.substring(0, 150) || 'No text';
+          console.log(`  [${index + 1}] ${fileName} - ${pageNum} (score: ${score}): "${preview}..."`);
+        });
+
         const processedContextChunks = contextResults
           .map(result => {
             if (!result.chunk_text) {

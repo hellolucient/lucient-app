@@ -384,7 +384,7 @@ export default function HomePage() {
                           <ReactMarkdown
                             components={{
                               // Make links open in new tab and style them
-                              a: ({ node, ...props }) => (
+                              a: ({ ...props }) => (
                                 <a
                                   {...props}
                                   target="_blank"
@@ -393,18 +393,18 @@ export default function HomePage() {
                                 />
                               ),
                               // Style headings
-                              h1: ({ node, ...props }) => <h1 {...props} className="text-lg font-bold mt-4 mb-2" />,
-                              h2: ({ node, ...props }) => <h2 {...props} className="text-base font-bold mt-3 mb-2" />,
-                              h3: ({ node, ...props }) => <h3 {...props} className="text-sm font-semibold mt-2 mb-1" />,
+                              h1: ({ ...props }) => <h1 {...props} className="text-lg font-bold mt-4 mb-2" />,
+                              h2: ({ ...props }) => <h2 {...props} className="text-base font-bold mt-3 mb-2" />,
+                              h3: ({ ...props }) => <h3 {...props} className="text-sm font-semibold mt-2 mb-1" />,
                               // Style lists
-                              ul: ({ node, ...props }) => <ul {...props} className="list-disc list-inside my-2 space-y-1" />,
-                              ol: ({ node, ...props }) => <ol {...props} className="list-decimal list-inside my-2 space-y-1" />,
-                              li: ({ node, ...props }) => <li {...props} className="ml-2" />,
+                              ul: ({ ...props }) => <ul {...props} className="list-disc list-inside my-2 space-y-1" />,
+                              ol: ({ ...props }) => <ol {...props} className="list-decimal list-inside my-2 space-y-1" />,
+                              li: ({ ...props }) => <li {...props} className="ml-2" />,
                               // Style paragraphs
-                              p: ({ node, ...props }) => <p {...props} className="mb-2" />,
+                              p: ({ ...props }) => <p {...props} className="mb-2" />,
                               // Style bold and italic
-                              strong: ({ node, ...props }) => <strong {...props} className="font-semibold" />,
-                              em: ({ node, ...props }) => <em {...props} className="italic" />,
+                              strong: ({ ...props }) => <strong {...props} className="font-semibold" />,
+                              em: ({ ...props }) => <em {...props} className="italic" />,
                             }}
                           >
                             {preprocessMarkdown(msg.content)}

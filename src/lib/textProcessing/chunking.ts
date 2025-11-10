@@ -11,23 +11,37 @@ interface DocumentChunk {
   metadata: Record<string, unknown>; // Changed 'any' to 'unknown'
 }
 
-// Basic text chunking function
+// Enhanced text chunking function with better context preservation
 export async function getDocumentChunks(
   text: string,
   options: ChunkingOptions = {}
 ): Promise<DocumentChunk[]> {
-  const { chunkSize = 1000, chunkOverlap = 200 } = options;
+  // Increased default chunk size and overlap to preserve more context
+  // Larger chunks = more context, larger overlap = less information loss at boundaries
+  const { chunkSize = 1500, chunkOverlap = 400 } = options;
 
   if (!text || text.trim() === '') {
     return [];
   }
 
-  // Using Langchain's text splitter as it's robust
-  // We might need to install 'langchain' if not already present
+  // Using Langchain's text splitter with optimized separators
+  // Separators are ordered by priority - tries to split on paragraphs first, then sentences, then words
+  // This preserves semantic meaning better than just character-based splitting
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize,
     chunkOverlap,
-    // separators: ["\n\n", "\n", " ", ""], // Default separators
+    separators: [
+      "\n\n\n",      // Triple newline (section breaks)
+      "\n\n",        // Double newline (paragraphs)
+      "\n",          // Single newline (lines)
+      ". ",          // Sentence endings with space
+      "! ",          // Exclamation with space
+      "? ",          // Question with space
+      "; ",          // Semicolon with space
+      ", ",          // Comma with space
+      " ",           // Space
+      ""             // Character (last resort)
+    ],
   });
 
   const documents: Document[] = await splitter.createDocuments([text]);

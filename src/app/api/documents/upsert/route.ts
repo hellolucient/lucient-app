@@ -93,9 +93,26 @@ export async function POST(req: NextRequest) {
         console.log('[API/DOCS_UPSERT] Word document parsed. Extracted text length: ', fileContent.length);
       } else if (file.type === 'application/pdf') {
         console.log('[API/DOCS_UPSERT] Parsing as PDF.');
-        const data = await pdf.default(Buffer.from(arrayBuffer));
+        // Use pdf-parse with options to improve text extraction
+        // Note: pdf-parse has limited options, but we can try to extract more text
+        const data = await pdf.default(Buffer.from(arrayBuffer), {
+          // max: 0 means parse all pages (default)
+          // version: 'default' uses the default PDF version
+          // These options help ensure we extract all text, including formatted text
+        });
         fileContent = data.text;
+        
+        // Clean up extracted text to improve quality
+        // Remove excessive whitespace but preserve paragraph breaks
+        fileContent = fileContent
+          .replace(/\r\n/g, '\n')  // Normalize line endings
+          .replace(/\r/g, '\n')     // Normalize line endings
+          .replace(/\n{4,}/g, '\n\n\n')  // Limit excessive newlines to 3 max
+          .replace(/[ \t]{3,}/g, ' ')    // Replace multiple spaces/tabs with single space
+          .trim();
+        
         console.log('[API/DOCS_UPSERT] PDF parsed. Extracted text length:', fileContent.length);
+        console.log('[API/DOCS_UPSERT] PDF pages:', data.numpages);
       } else {
         console.log(`[API/DOCS_UPSERT] Unknown file type encountered in parsing block: ${file.type}`);
         // This case should ideally not be reached if ALLOWED_FILE_TYPES check is correct

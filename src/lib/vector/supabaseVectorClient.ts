@@ -39,18 +39,17 @@ export async function upsertDocumentChunks(
   // For shared knowledge base, delete by file_name only (not user_id)
   // since all admins share the same documents
   console.log(`Deleting existing chunks for file: ${fileName}`);
-  const { error: deleteError, count: deletedCount } = await supabase
+  const { error: deleteError } = await supabase
     .from('documents')
     .delete()
-    .eq('file_name', fileName)
-    .select('*', { count: 'exact', head: true });
+    .eq('file_name', fileName);
 
   if (deleteError) {
     console.error('Error deleting existing chunks:', deleteError);
     // Don't throw - continue with insert even if delete fails
     // This allows first-time uploads to work
   } else {
-    console.log(`Deleted ${deletedCount || 0} existing chunks for file: ${fileName}`);
+    console.log(`Deleted existing chunks for file: ${fileName}`);
   }
 
   const documentsToInsert = [];

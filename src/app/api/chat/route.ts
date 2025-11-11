@@ -164,10 +164,122 @@ export async function POST(request: NextRequest) {
       console.log(`Chat API: Retrieving RAG context for query: "${query.substring(0, 100)}..."`);
       // Query all documents (shared knowledge base) - pass undefined instead of user.id
       // Using very low threshold (0.25) to ensure we get more results - cosine similarity can be lower for semantic matches
-      const contextResults = await queryTopK(query, TOP_K_RESULTS, undefined, 0.25);
+      // Query MORE chunks initially to ensure document diversity across hundreds of documents
+      // With many documents, we need a larger pool to ensure we get results from multiple sources
+      const initialQuerySize = TOP_K_RESULTS * 10; // Query 10x more to ensure we have a good pool
+      const contextResults = await queryTopK(query, initialQuerySize, undefined, 0.25);
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
       
       if (contextResults && contextResults.length > 0) {
+        // Score-aware document diversity strategy:
+        // 1. Group chunks by document and calculate document-level metrics
+        // 2. Allow more chunks from highly relevant documents (high scores)
+        // 3. Ensure minimum representation from any document with relevant chunks
+        // 4. Balance diversity with relevance
+        
+        const documentChunks = new Map<string, typeof contextResults>();
+        const documentScores = new Map<string, number[]>(); // Track scores per document
+        
+        // Group chunks by document
+        for (const result of contextResults) {
+          const fileName = result.file_name || 'Unknown';
+          if (!documentChunks.has(fileName)) {
+            documentChunks.set(fileName, []);
+            documentScores.set(fileName, []);
+          }
+          documentChunks.get(fileName)!.push(result);
+          const score = typeof result.score === 'number' ? result.score : 0;
+          documentScores.get(fileName)!.push(score);
+        }
+        
+        // Calculate average score per document
+        const documentAvgScores = new Map<string, number>();
+        const documentMaxScores = new Map<string, number>();
+        documentScores.forEach((scores, fileName) => {
+          const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+          const max = Math.max(...scores);
+          documentAvgScores.set(fileName, avg);
+          documentMaxScores.set(fileName, max);
+        });
+        
+        // Determine adaptive limits per document based on relevance
+        // High-scoring documents (>0.7) get more chunks, lower-scoring get fewer
+        const getMaxChunksForDocument = (avgScore: number, maxScore: number): number => {
+          if (maxScore > 0.75) return 5; // Very relevant: allow up to 5 chunks
+          if (maxScore > 0.65) return 4; // Relevant: allow up to 4 chunks
+          if (maxScore > 0.55) return 3; // Moderately relevant: allow up to 3 chunks
+          if (maxScore > 0.45) return 2; // Somewhat relevant: allow up to 2 chunks
+          return 1; // Low relevance: just 1 chunk
+        };
+        
+        // Select chunks with score-aware diversity
+        const diverseResults: typeof contextResults = [];
+        const documentCounts = new Map<string, number>();
+        
+        // Sort documents by their max score (most relevant first)
+        const sortedDocuments = Array.from(documentChunks.keys()).sort((a, b) => {
+          const scoreA = documentMaxScores.get(a) || 0;
+          const scoreB = documentMaxScores.get(b) || 0;
+          return scoreB - scoreA;
+        });
+        
+        // First pass: take chunks from each document up to their adaptive limit
+        for (const fileName of sortedDocuments) {
+          const chunks = documentChunks.get(fileName)!;
+          const maxChunks = getMaxChunksForDocument(
+            documentAvgScores.get(fileName) || 0,
+            documentMaxScores.get(fileName) || 0
+          );
+          
+          // Take top chunks from this document (they're already sorted by score from queryTopK)
+          const chunksToTake = Math.min(chunks.length, maxChunks);
+          for (let i = 0; i < chunksToTake && diverseResults.length < TOP_K_RESULTS; i++) {
+            diverseResults.push(chunks[i]);
+            documentCounts.set(fileName, (documentCounts.get(fileName) || 0) + 1);
+          }
+          
+          if (diverseResults.length >= TOP_K_RESULTS) break;
+        }
+        
+        // Second pass: if we haven't filled our quota, add more chunks from top documents
+        // This ensures we get comprehensive coverage from highly relevant documents
+        if (diverseResults.length < TOP_K_RESULTS) {
+          for (const fileName of sortedDocuments) {
+            const chunks = documentChunks.get(fileName)!;
+            const currentCount = documentCounts.get(fileName) || 0;
+            const maxChunks = getMaxChunksForDocument(
+              documentAvgScores.get(fileName) || 0,
+              documentMaxScores.get(fileName) || 0
+            );
+            
+            // Add more chunks if we haven't hit the limit and document is highly relevant
+            if (currentCount < maxChunks && chunks.length > currentCount) {
+              for (let i = currentCount; i < chunks.length && diverseResults.length < TOP_K_RESULTS; i++) {
+                diverseResults.push(chunks[i]);
+                documentCounts.set(fileName, (documentCounts.get(fileName) || 0) + 1);
+              }
+            }
+            
+            if (diverseResults.length >= TOP_K_RESULTS) break;
+          }
+        }
+        
+        // Log document diversity with score information
+        console.log(`Chat API: Score-aware document diversity - Retrieved chunks from ${documentCounts.size} unique documents:`);
+        documentCounts.forEach((count, fileName) => {
+          const avgScore = documentAvgScores.get(fileName)?.toFixed(3) || 'N/A';
+          const maxScore = documentMaxScores.get(fileName)?.toFixed(3) || 'N/A';
+          console.log(`  - ${fileName}: ${count} chunks (avg: ${avgScore}, max: ${maxScore})`);
+        });
+        
+        // Use the diverse results, sorted by score (they should already be sorted, but ensure it)
+        const finalResults = diverseResults
+          .sort((a, b) => {
+            const scoreA = typeof a.score === 'number' ? a.score : 0;
+            const scoreB = typeof b.score === 'number' ? b.score : 0;
+            return scoreB - scoreA; // Descending order
+          })
+          .slice(0, TOP_K_RESULTS);
         // Search ALL chunks for the specific quote before logging
         const searchPatterns = [
           'between pregnancy and',
@@ -179,11 +291,11 @@ export async function POST(request: NextRequest) {
           '1,000 days'
         ];
         
-        console.log(`Chat API: Searching all ${contextResults.length} chunks for specific quote patterns...`);
+        console.log(`Chat API: Searching all ${finalResults.length} chunks for specific quote patterns...`);
         
         // First, search ALL chunks for "2nd birthday" or "child's" to see if quote is split
         console.log(`Chat API: Checking if quote is split across chunks...`);
-        contextResults.forEach((result, chunkIndex) => {
+        finalResults.forEach((result, chunkIndex) => {
           const fullText = result.chunk_text || '';
           const has2ndBirthday = fullText.toLowerCase().includes('2nd birthday') || fullText.toLowerCase().includes('second birthday');
           const hasChilds = fullText.toLowerCase().includes("child's");
@@ -194,7 +306,7 @@ export async function POST(request: NextRequest) {
           }
         });
         
-        contextResults.forEach((result, chunkIndex) => {
+        finalResults.forEach((result, chunkIndex) => {
           const fullText = result.chunk_text || '';
           searchPatterns.forEach(pattern => {
             const patternIndex = fullText.toLowerCase().indexOf(pattern.toLowerCase());
@@ -222,8 +334,8 @@ export async function POST(request: NextRequest) {
         });
         
         // Log detailed information about retrieved chunks
-        console.log(`Chat API: Retrieved ${contextResults.length} chunks. Details:`);
-        contextResults.forEach((result, index) => {
+        console.log(`Chat API: Retrieved ${finalResults.length} chunks. Details:`);
+        finalResults.forEach((result, index) => {
           const pageNum = result.metadata?.page_number !== undefined ? `Page ${result.metadata.page_number}` : 'No page';
           const fileName = result.file_name || 'Unknown';
           const score = result.score?.toFixed(4) || 'N/A';
@@ -278,7 +390,7 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        const processedContextChunks = contextResults
+        const processedContextChunks = finalResults
           .map(result => {
             if (!result.chunk_text) {
               console.log(`Chat API: Skipping Supabase result ID ${result.id} (score: ${result.score.toFixed(4)}) due to missing chunk_text content.`);
@@ -299,11 +411,11 @@ export async function POST(request: NextRequest) {
 
         if (processedContextChunks.length > 0) {
           const context = processedContextChunks.join('\n\n---\n\n');
-          console.log(`Chat API: Processed ${processedContextChunks.length} context snippets (from ${contextResults.length} raw Supabase results) to be used for RAG.`);
+          console.log(`Chat API: Processed ${processedContextChunks.length} context snippets (from ${finalResults.length} diverse results, ${contextResults.length} total raw Supabase results) to be used for RAG.`);
           console.log(`Chat API: First 200 chars of retrieved context: ${context.substring(0, 200)}...`);
           return context;
         } else {
-          console.log(`Chat API: ${contextResults.length} raw results from Supabase, but none contained usable text content after processing.`);
+          console.log(`Chat API: ${finalResults.length} diverse results from Supabase, but none contained usable text content after processing.`);
           return '';
         }
       } else {

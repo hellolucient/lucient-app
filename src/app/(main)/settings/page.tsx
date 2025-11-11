@@ -31,6 +31,12 @@ export default function ManageApiKeysPage() {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // URL Upload State
+  const [urlInput, setUrlInput] = useState('');
+  const [isUrlUploading, setIsUrlUploading] = useState(false);
+  const [urlMessage, setUrlMessage] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
   useEffect(() => {
     async function fetchUserProfile() {
       try {
@@ -131,6 +137,53 @@ export default function ManageApiKeysPage() {
     }
   };
 
+  const handleUrlSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!urlInput || !urlInput.trim()) {
+      setUrlError('Please enter a URL.');
+      return;
+    }
+
+    // Basic URL validation
+    try {
+      new URL(urlInput);
+    } catch {
+      setUrlError('Please enter a valid URL (e.g., https://example.com/report.pdf)');
+      return;
+    }
+
+    setIsUrlUploading(true);
+    setUrlMessage(null);
+    setUrlError(null);
+
+    try {
+      const response = await fetch('/api/documents/upsert-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setUrlMessage(
+          result.message || 
+          `Successfully processed ${result.title || urlInput}. Created ${result.chunks || 0} chunks.`
+        );
+        setUrlInput('');
+      } else {
+        setUrlError(result.error || result.details || 'Failed to process URL.');
+      }
+    } catch (err) {
+      console.error("Failed to process URL:", err);
+      setUrlError('An unexpected error occurred while processing the URL. Check console for details.');
+    } finally {
+      setIsUrlUploading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-2xl space-y-12">
       <section>
@@ -197,33 +250,71 @@ export default function ManageApiKeysPage() {
       </section>
 
       {userProfile?.user_tier === 'admin' && (
-        <section>
-          <h2 className="text-xl md:text-2xl font-bold mb-6 text-primary">Knowledge Base Document Upload</h2>
-          <form onSubmit={handleDocumentUpload} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
-            <div>
-              <Label htmlFor="documentUpload">Upload Document (.txt, .doc, .docx, .pdf)</Label>
-              <Input
-                id="documentUpload"
-                type="file"
-                accept=".txt,.doc,.docx,.pdf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={handleFileChange}
-                className="mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-              />
-              {selectedFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedFile.name} ({selectedFile.type})</p>}
-            </div>
+        <>
+          <section>
+            <h2 className="text-xl md:text-2xl font-bold mb-6 text-primary">Knowledge Base Document Upload</h2>
+            <form onSubmit={handleDocumentUpload} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
+              <div>
+                <Label htmlFor="documentUpload">Upload Document (.txt, .doc, .docx, .pdf)</Label>
+                <Input
+                  id="documentUpload"
+                  type="file"
+                  accept=".txt,.doc,.docx,.pdf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={handleFileChange}
+                  className="mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                />
+                {selectedFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedFile.name} ({selectedFile.type})</p>}
+              </div>
 
-            {uploadMessage && (
-              <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{uploadMessage}</p>
-            )}
-            {uploadError && (
-              <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{uploadError}</p>
-            )}
+              {uploadMessage && (
+                <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{uploadMessage}</p>
+              )}
+              {uploadError && (
+                <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{uploadError}</p>
+              )}
 
-            <Button type="submit" className="w-full md:w-auto" disabled={isUploading || !selectedFile}>
-              {isUploading ? 'Uploading...' : 'Upload Document'}
-            </Button>
-          </form>
-        </section>
+              <Button type="submit" className="w-full md:w-auto" disabled={isUploading || !selectedFile}>
+                {isUploading ? 'Uploading...' : 'Upload Document'}
+              </Button>
+            </form>
+          </section>
+
+          <section>
+            <h2 className="text-xl md:text-2xl font-bold mb-6 text-primary">Add URL to Knowledge Base</h2>
+            <form onSubmit={handleUrlSubmit} className="space-y-6 bg-card p-6 rounded-lg shadow-md">
+              <div>
+                <Label htmlFor="urlInput">URL (PDF, HTML page, or text document)</Label>
+                <Input
+                  id="urlInput"
+                  type="url"
+                  placeholder="https://example.com/research-report.pdf"
+                  value={urlInput}
+                  onChange={(e) => {
+                    setUrlInput(e.target.value);
+                    setUrlMessage(null);
+                    setUrlError(null);
+                  }}
+                  className="mt-1"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter a URL to a PDF, research paper, article, or report. The content will be fetched and added to the knowledge base.
+                </p>
+              </div>
+
+              {urlMessage && (
+                <p className="text-sm text-green-600 dark:text-green-400 py-2 px-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md">{urlMessage}</p>
+              )}
+              {urlError && (
+                <p className="text-sm text-destructive py-2 px-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-md">{urlError}</p>
+              )}
+
+              <Button type="submit" className="w-full md:w-auto" disabled={isUrlUploading || !urlInput.trim()}>
+                {isUrlUploading ? 'Processing...' : 'Add URL to Knowledge Base'}
+              </Button>
+            </form>
+          </section>
+        </>
       )}
 
       {/* We can add a section here later to list/manage existing keys */}

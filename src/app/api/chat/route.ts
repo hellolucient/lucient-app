@@ -166,9 +166,20 @@ export async function POST(request: NextRequest) {
       // Using very low threshold (0.25) to ensure we get more results - cosine similarity can be lower for semantic matches
       // Query MORE chunks initially to ensure document diversity across hundreds of documents
       // With many documents, we need a larger pool to ensure we get results from multiple sources
+      // Using very low threshold (0.15) to catch even weak semantic matches
+      // This helps catch documents that mention terms but might have lower overall similarity
       const initialQuerySize = TOP_K_RESULTS * 10; // Query 10x more to ensure we have a good pool
-      const contextResults = await queryTopK(query, initialQuerySize, undefined, 0.25);
+      const contextResults = await queryTopK(query, initialQuerySize, undefined, 0.15);
       console.log(`Chat API: Retrieved ${contextResults?.length || 0} context results from vector search.`);
+      
+      // Log all unique file names found to help debug missing documents
+      const uniqueFiles = new Set(contextResults.map(r => r.file_name).filter(Boolean));
+      console.log(`Chat API: Found ${uniqueFiles.size} unique documents in search results:`);
+      Array.from(uniqueFiles).sort().forEach(fileName => {
+        const chunksForFile = contextResults.filter(r => r.file_name === fileName).length;
+        const maxScore = Math.max(...contextResults.filter(r => r.file_name === fileName).map(r => typeof r.score === 'number' ? r.score : 0));
+        console.log(`  - ${fileName}: ${chunksForFile} chunks, max score: ${maxScore.toFixed(4)}`);
+      });
       
       if (contextResults && contextResults.length > 0) {
         // Score-aware document diversity strategy:
@@ -272,6 +283,14 @@ export async function POST(request: NextRequest) {
           console.log(`  - ${fileName}: ${count} chunks (avg: ${avgScore}, max: ${maxScore})`);
         });
         
+        // Also log ALL documents that were in the initial results (even if filtered out)
+        console.log(`Chat API: Total documents in initial query pool: ${documentChunks.size}`);
+        documentChunks.forEach((chunks, fileName) => {
+          const maxScore = documentMaxScores.get(fileName)?.toFixed(3) || 'N/A';
+          const included = documentCounts.has(fileName);
+          console.log(`  - ${fileName}: ${chunks.length} chunks available, max score: ${maxScore}, included: ${included}`);
+        });
+        
         // Use the diverse results, sorted by score (they should already be sorted, but ensure it)
         const finalResults = diverseResults
           .sort((a, b) => {
@@ -280,6 +299,50 @@ export async function POST(request: NextRequest) {
             return scoreB - scoreA; // Descending order
           })
           .slice(0, TOP_K_RESULTS);
+        // Search ALL chunks for specific terms from the query
+        // Extract key terms from the query for debugging and keyword boosting
+        const queryLower = query.toLowerCase();
+        const queryTerms = queryLower
+          .split(/\s+/)
+          .filter(term => term.length > 3) // Only meaningful terms
+          .slice(0, 5); // Limit to first 5 terms
+        
+        // Also check for important phrases (like "reminiscence therapy")
+        const importantPhrases: string[] = [];
+        if (queryLower.includes('reminiscence')) importantPhrases.push('reminiscence');
+        if (queryLower.includes('therapy')) importantPhrases.push('therapy');
+        
+        console.log(`Chat API: Searching all ${finalResults.length} chunks for query terms: ${queryTerms.join(', ')}`);
+        if (importantPhrases.length > 0) {
+          console.log(`Chat API: Also searching for important phrases: ${importantPhrases.join(', ')}`);
+        }
+        
+        // Check if any chunks contain the query terms
+        finalResults.forEach((result, chunkIndex) => {
+          const fullText = (result.chunk_text || '').toLowerCase();
+          const matchingTerms = queryTerms.filter(term => fullText.includes(term));
+          const matchingPhrases = importantPhrases.filter(phrase => fullText.includes(phrase));
+          if (matchingTerms.length > 0 || matchingPhrases.length > 0) {
+            console.log(`  >>> Chunk [${chunkIndex + 1}] from "${result.file_name}" contains terms: ${[...matchingTerms, ...matchingPhrases].join(', ')}`);
+          }
+        });
+        
+        // Also check ALL initial results (not just finalResults) for important phrases
+        // This helps us see if documents were filtered out that actually contain the terms
+        console.log(`Chat API: Checking ALL ${contextResults.length} initial results for important phrases...`);
+        contextResults.forEach((result, index) => {
+          const fullText = (result.chunk_text || '').toLowerCase();
+          const hasImportantPhrase = importantPhrases.some(phrase => fullText.includes(phrase));
+          if (hasImportantPhrase) {
+            const score = typeof result.score === 'number' ? result.score.toFixed(4) : 'N/A';
+            const included = finalResults.some(r => r.id === result.id);
+            console.log(`  >>> [${index + 1}] "${result.file_name}" (score: ${score}, included: ${included}) contains important phrase`);
+            if (!included) {
+              console.log(`      >>> This document was filtered out but contains relevant terms!`);
+            }
+          }
+        });
+        
         // Search ALL chunks for the specific quote before logging
         const searchPatterns = [
           'between pregnancy and',

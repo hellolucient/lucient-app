@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
+    "@mozilla/readability": "^0.6.0",
     "@qdrant/js-client-rest": "^1.14.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
@@ -20,8 +21,10 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.9",
+    "cheerio": "^1.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jsdom": "^27.0.1",
     "langchain": "^0.3.27",
     "llamaindex": "^0.11.6",
     "lucide-react": "^0.511.0",
@@ -42,6 +45,8 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.1.8",
+    "@types/cheerio": "^0.22.35",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^20",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",

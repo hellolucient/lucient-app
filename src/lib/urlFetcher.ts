@@ -111,7 +111,7 @@ async function fetchPdfContent(url: string, response: Response): Promise<Fetched
 
     return {
       text,
-      title: data.info?.Title || url.split('/').pop() || 'PDF Document',
+      title: (typeof data.info?.Title === 'string' ? data.info.Title : null) || url.split('/').pop() || 'PDF Document',
       url,
       contentType: 'pdf',
       metadata: {
@@ -144,7 +144,7 @@ async function fetchHtmlContent(url: string, response: Response): Promise<Fetche
       const reader = new Readability(document);
       const article = reader.parse();
 
-      if (article) {
+      if (article && article.content) {
         // Use Readability's extracted content
         const $ = cheerio.load(article.content);
         // Remove script and style tags
